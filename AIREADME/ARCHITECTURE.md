@@ -4,7 +4,7 @@
 
 ## 技术栈
 Electron + React + Vite + TypeScript + SQLite（better-sqlite3，主进程同步读写）。本地单机、离线、双击启动。Electron 自带 Chromium 渲染器，打印走 `window.print()`，Mac 开发所见即≈Windows 效果。选型理由见 DECISIONS D5（推翻 D3）。
-注：better-sqlite3 于 Phase 2 引入，Phase 1 尚未列入 package.json 依赖。
+注：better-sqlite3 为原生模块。vitest 用 Node ABI、Electron 运行用 Electron ABI，两者编译产物不通用；接入主进程前需 electron-rebuild 重建（并在 electron-vite 里把它列为 main 进程 external，不进 bundle）。
 
 ## 组件 + 数据流
 

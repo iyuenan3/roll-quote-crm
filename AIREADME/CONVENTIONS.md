@@ -9,6 +9,10 @@
 - amount 仍用未截断单价乘张数再取整：`round(roll_price × area ÷ 21 × qty, 0)`，不用已截断的 unit_price 乘，避免累积误差。
 - 提示：金额取整后，送货单上「单价 × 数量」与金额可能有 ≤ 1 元视觉差，以金额为准。
 
+## 时间 / 时区
+- 所有日期 / 时间一律用本机本地时区（商家所在地）。SQLite 默认值用 `date('now','localtime')` / `datetime('now','localtime')`，绝不用裸 `date('now')`（UTC，会让凌晨订单错算日期 / 月份）。
+- DAO 对外来日期串先 `trim() || null` 归一，空串回落当天本地日期。
+
 ## 核心算法
 - pricing / parse-order 必须是纯函数，放 `src/core`，带单测。UI 只调用，不内联算法。
 

@@ -3,7 +3,7 @@
 //  - setQuote 改价 = 翻旧行 is_current=0 + 追加新行，绝不原地改价（保全历史）。
 //  - createOrder 把 roll_price_used / unit_price / amount 快照入 order_items，后续报价变动不回改。
 import type Database from 'better-sqlite3';
-import { amountToChinese } from '../core/pricing';
+import { amountToChinese, round, AMOUNT_DECIMALS } from '../core/pricing';
 
 type DB = Database.Database;
 
@@ -69,12 +69,21 @@ export interface OrderItem {
 
 // ---------- 行映射 ----------
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/** 安全解析 aliases JSON：脏数据 / 非数组一律降级为空数组，绝不让一行坏数据拖垮整列表。 */
+function parseAliases(s: unknown): string[] {
+  try {
+    const a = JSON.parse(typeof s === 'string' && s ? s : '[]');
+    return Array.isArray(a) ? a.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 function toProduct(r: any): Product {
   return {
     id: r.id,
     code: r.code,
     name: r.name,
-    aliases: JSON.parse(r.aliases || '[]'),
+    aliases: parseAliases(r.aliases),
     specNote: r.spec_note,
     defaultUnit: r.default_unit,
     createdAt: r.created_at,
@@ -187,6 +196,10 @@ export function setQuote(
     note?: string;
   },
 ): number {
+  if (!Number.isFinite(input.rollPrice) || input.rollPrice <= 0) {
+    throw new Error('setQuote: rollPrice 必须为正有限数');
+  }
+  const effectiveDate = input.effectiveDate?.trim() || null; // 空串 / 空白归一为 null，回落当天本地日期
   const tx = db.transaction((i: typeof input) => {
     // 翻旧的 current（不删、不原地改价，保全历史）
     db.prepare(
@@ -196,9 +209,9 @@ export function setQuote(
     const r = db
       .prepare(
         `INSERT INTO quotes (customer_id, product_id, roll_price, effective_date, is_current, note)
-         VALUES (?, ?, ?, COALESCE(?, date('now')), 1, ?)`,
+         VALUES (?, ?, ?, COALESCE(?, date('now', 'localtime')), 1, ?)`,
       )
-      .run(i.customerId, i.productId, i.rollPrice, i.effectiveDate ?? null, i.note ?? '');
+      .run(i.customerId, i.productId, i.rollPrice, effectiveDate, i.note ?? '');
     return Number(r.lastInsertRowid);
   });
   return tx(input);
@@ -248,15 +261,20 @@ export function createOrder(
     items: NewOrderItem[];
   },
 ): number {
+  const orderDate = input.orderDate?.trim() || null; // 空串 / 空白归一为 null，回落当天本地日期
   const tx = db.transaction((o: typeof input) => {
-    const total = o.items.reduce((s, it) => s + it.amount, 0);
+    // 防御性取整：保证 total_amount 为整数元（D6），且与 total_in_words 同源
+    const total = round(
+      o.items.reduce((s, it) => s + it.amount, 0),
+      AMOUNT_DECIMALS,
+    );
     const words = amountToChinese(total);
     const r = db
       .prepare(
         `INSERT INTO orders (order_no, customer_id, order_date, total_amount, total_in_words, remark, status)
-         VALUES (?, ?, COALESCE(?, date('now')), ?, ?, ?, ?)`,
+         VALUES (?, ?, COALESCE(?, date('now', 'localtime')), ?, ?, ?, ?)`,
       )
-      .run(o.orderNo, o.customerId, o.orderDate ?? null, total, words, o.remark ?? '', o.status ?? 'active');
+      .run(o.orderNo, o.customerId, orderDate, total, words, o.remark ?? '', o.status ?? 'active');
     const orderId = Number(r.lastInsertRowid);
     const insItem = db.prepare(
       `INSERT INTO order_items

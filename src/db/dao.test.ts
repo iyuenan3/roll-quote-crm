@@ -132,3 +132,96 @@ describe('orders 红线：快照 roll_price_used，历史不回改', () => {
     expect(mk).toThrow();
   });
 });
+
+// 一个通过所有 CHECK 的合法行项工厂
+const okItem = (over: Partial<Parameters<typeof createOrder>[1]['items'][number]> = {}) => ({
+  productId: pid,
+  rawSpec: '100*200',
+  widthMm: 100,
+  heightMm: 200,
+  qty: 1,
+  unit: '张',
+  areaSqm: 0.02,
+  rollPriceUsed: 100,
+  unitPrice: 1,
+  amount: 1,
+  ...over,
+});
+
+describe('DB 加固（审查后补测）', () => {
+  it('setQuote 拒绝非正报价（0 / 负）', () => {
+    expect(() => setQuote(db, { customerId: cid, productId: pid, rollPrice: 0 })).toThrow();
+    expect(() => setQuote(db, { customerId: cid, productId: pid, rollPrice: -5 })).toThrow();
+  });
+
+  it('CHECK 堵住 is_current 非 0/1 绕过部分唯一索引', () => {
+    setQuote(db, { customerId: cid, productId: pid, rollPrice: 100 });
+    expect(() =>
+      db
+        .prepare('INSERT INTO quotes (customer_id, product_id, roll_price, is_current) VALUES (?, ?, ?, 2)')
+        .run(cid, pid, 200),
+    ).toThrow();
+  });
+
+  it('setQuote 事务原子：追加步失败时旧 current 不受影响、无孤儿行', () => {
+    setQuote(db, { customerId: cid, productId: pid, rollPrice: 100 });
+    expect(() => setQuote(db, { customerId: cid, productId: 99999, rollPrice: 50 })).toThrow(); // FK
+    expect(getCurrentQuote(db, cid, pid)?.rollPrice).toBe(100); // 真实当前价不受影响
+    expect(listQuoteHistory(db, cid, 99999)).toEqual([]); // 无孤儿
+  });
+
+  it('createOrder 事务回滚：某行 FK 失败则整单不残留', () => {
+    setQuote(db, { customerId: cid, productId: pid, rollPrice: 100 });
+    expect(() =>
+      createOrder(db, {
+        orderNo: 'ROLLBACK-1',
+        customerId: cid,
+        items: [okItem(), okItem({ productId: 99999 })], // 第二行 FK 失败
+      }),
+    ).toThrow();
+    const c = db.prepare("SELECT count(*) c FROM orders WHERE order_no = 'ROLLBACK-1'").get() as {
+      c: number;
+    };
+    expect(c.c).toBe(0); // 订单头与已插行项全部回滚
+  });
+
+  it('FK 违反：不存在的 customer / product 直接抛错', () => {
+    expect(() => setQuote(db, { customerId: 99999, productId: pid, rollPrice: 100 })).toThrow();
+    expect(() =>
+      createOrder(db, { orderNo: 'FK-1', customerId: 99999, items: [okItem()] }),
+    ).toThrow();
+  });
+
+  it('无数据查询返回 undefined / 空数组', () => {
+    expect(getCurrentQuote(db, cid, pid)).toBeUndefined();
+    expect(listQuoteHistory(db, cid, pid)).toEqual([]);
+    expect(getOrder(db, 99999)).toBeUndefined();
+  });
+
+  it('删订单级联删行项（ON DELETE CASCADE）', () => {
+    const oid = createOrder(db, { orderNo: 'CASCADE-1', customerId: cid, items: [okItem()] });
+    db.prepare('DELETE FROM orders WHERE id = ?').run(oid);
+    const c = db.prepare('SELECT count(*) c FROM order_items WHERE order_id = ?').get(oid) as {
+      c: number;
+    };
+    expect(c.c).toBe(0);
+  });
+
+  it('多行合计与中文大写：[11, 22] → 33 / 人民币叁拾叁元整', () => {
+    const oid = createOrder(db, {
+      orderNo: 'MULTI-1',
+      customerId: cid,
+      items: [okItem({ unitPrice: 11, amount: 11 }), okItem({ unitPrice: 22, amount: 22 })],
+    });
+    const o = getOrder(db, oid)!;
+    expect(o.order.totalAmount).toBe(33);
+    expect(o.order.totalInWords).toBe('人民币叁拾叁元整');
+  });
+
+  it('aliases 特殊字符 JSON 往返；脏数据降级为空数组', () => {
+    const id = createProduct(db, { name: '特殊品', aliases: ['a"b', '逗,号', '换\n行', '😀'] });
+    expect(listProducts(db).find((x) => x.id === id)?.aliases).toEqual(['a"b', '逗,号', '换\n行', '😀']);
+    db.prepare("UPDATE products SET aliases = 'not-json' WHERE id = ?").run(id);
+    expect(listProducts(db).find((x) => x.id === id)?.aliases).toEqual([]); // 不崩，降级
+  });
+});
