@@ -25,6 +25,12 @@
 - 现状：建表用 `CREATE TABLE IF NOT EXISTS`，已有库改结构不会升级。pre-release 还没有真实订单库，是引入成本最低的窗口。
 - 计划：用 `PRAGMA user_version` 记版本，openDb 按版本顺序跑 ALTER + 回填。一旦有真实数据在外，再补会很贵。
 
+## 2026-06-07 · electron-rebuild 必须带 -f，否则 node↔electron 切换会留旧 ABI
+- 现象:跑过 `npm run rebuild:node`(better-sqlite3 切 Node ABI 127)后,再 `electron-rebuild -w better-sqlite3`(无 -f)虽打印「Rebuild Complete」却跳过实际重编,留下 127;Electron 33(ABI 130)加载报 `NODE_MODULE_VERSION 127 vs 130 / ERR_DLOPEN_FAILED`。
+- 根因:electron-rebuild 不加 -f 时会「判断已是最新就跳过」,node↔electron 来回切时该判断失准。
+- 结论:`rebuild:electron` 脚本必须 `electron-rebuild -f -w better-sqlite3`(强制)。验证 round-trip:rebuild:node→127、rebuild:electron→130 各跑一次确认。headers 缓存在 ~/.electron-gyp 后不依赖网络,不需要 --build-from-source / 指定 dist-url(那是我被假探针带偏的弯路)。
+- 验尺教训:探 better-sqlite3 的 ABI 不能用 `require('better-sqlite3')`,它在 `new Database()` 才 lazy load 原生模块;`require` 成功是假阴性。正确探针:`new (require('better-sqlite3'))(':memory:')` 看是否抛 ERR_DLOPEN_FAILED。
+
 ## 2026-06-07 · Electron 二进制装不上要用国内镜像
 - 现象：`npm install` 在 electron postinstall 卡 `RequestError: read ETIMEDOUT`，整个 install 回滚。
 - 根因：electron 二进制默认从 GitHub releases 拉，国内网络超时。

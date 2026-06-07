@@ -10,6 +10,9 @@ import type {
   NewOrderItem,
 } from '../db/dao';
 
+// 给渲染进程复用领域模型（渲染层从 shared 取类型，不直接 import db 层）
+export type { Company, Customer, Product, Quote, Order, OrderItem, NewOrderItem } from '../db/dao';
+
 export interface DbApi {
   getCompany(): Promise<Company>;
   upsertCompany(c: Company): Promise<void>;
