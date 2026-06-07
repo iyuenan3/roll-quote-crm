@@ -102,4 +102,51 @@ describe('parseOrder · 告警与边界', () => {
     const r = parseOrder('\n\n样品 100*200 3张\n\n');
     expect(r.items).toHaveLength(1);
   });
+  it('空输入返回空结果', () => {
+    const r = parseOrder('');
+    expect(r.items).toHaveLength(0);
+    expect(r.warnings).toHaveLength(0);
+    expect(r.customer).toBeUndefined();
+  });
+});
+
+describe('parseOrder · 解析加固（回归）', () => {
+  it('品名含「数字x数字」不被尺寸吞：取数量前最后一个尺寸', () => {
+    const r = parseOrder('3x5加强胶 2500*893 21张');
+    expect(r.items).toHaveLength(1);
+    expect(r.items[0].productName).toBe('3x5加强胶');
+    expect(r.items[0].widthMm).toBe(2500);
+    expect(r.items[0].heightMm).toBe(893);
+    expect(r.items[0].qty).toBe(21);
+  });
+  it('小数尺寸报 parse-error，不静默截断', () => {
+    const r = parseOrder('样品 100.5*200 3张');
+    expect(r.items).toHaveLength(0);
+    expect(r.warnings.some((w) => w.kind === 'parse-error')).toBe(true);
+  });
+  it('小数数量报 parse-error', () => {
+    const r = parseOrder('样品 100*200 2.5张');
+    expect(r.items).toHaveLength(0);
+    expect(r.warnings.some((w) => w.kind === 'parse-error')).toBe(true);
+  });
+  it('缺品名（行首即尺寸）报 parse-error，不入 items', () => {
+    const r = parseOrder('100*200 3张');
+    expect(r.items).toHaveLength(0);
+    expect(r.warnings.some((w) => w.kind === 'parse-error')).toBe(true);
+  });
+  it('空品名不会 fuzzy 误绑产品', () => {
+    const r = parseOrder('100*200 3张', [{ id: 1, name: '05纯低温胶' }]);
+    expect(r.items).toHaveLength(0);
+  });
+  it('fuzzy 多命中 → ambiguous + 告警，不静默取首个', () => {
+    const products: Product[] = [
+      { id: 1, name: '05纯低温胶' },
+      { id: 2, name: '06纯低温胶' },
+    ];
+    const r = parseOrder('低温 100*200 3张', products);
+    expect(r.items[0].matchType).toBe('ambiguous');
+    expect(r.items[0].matchedProduct).toBeUndefined();
+    expect(r.items[0].candidates?.map((c) => c.id)).toEqual([1, 2]);
+    expect(r.warnings.some((w) => w.kind === 'product-ambiguous')).toBe(true);
+  });
 });

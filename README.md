@@ -2,7 +2,11 @@
 
 > 面向卷材（低温胶等按卷 / 按㎡ 计价产品）销售商家的本地桌面 CRM。客户按固定模板发单，粘贴即自动按「客户 × 产品」最新报价算出每行单价金额，生成订单、打印送货单、看月度消费统计。本地单机、离线、双击启动。
 
-## ✨ 特性
+## 🚦 状态
+
+开发中（in-progress）。**Phase 1 已完成**：Electron 脚手架 + `src/core` 计价 / 解析纯函数 + 单测。下方「特性」描述目标产品全貌，其中订单保存、送货单打印、数据库、统计等属 **Phase 2 计划**，尚未实现（路线图见 `AIREADME/ROADMAP`）。
+
+## ✨ 特性（目标）
 
 - 「客户 × 产品 × 每卷报价」二维报价管理，报价改动只追加、留全量历史。
 - 微信订单文本粘贴即解析，品名三级匹配（精确 → 别名 → 模糊），匹配不到给告警。
@@ -14,7 +18,7 @@
 
 ## 🏗 技术栈
 
-Electron + React + Vite + TypeScript + SQLite（better-sqlite3）。计价 / 解析为 `src/core` 纯函数，全部带 vitest 单测；UI 只调用、不内联算法。
+Electron + React + Vite + TypeScript + SQLite（better-sqlite3，Phase 2 引入）。计价 / 解析为 `src/core` 纯函数，全部带 vitest 单测；UI 只调用、不内联算法。
 
 ## 📐 计价口径
 

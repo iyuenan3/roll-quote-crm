@@ -1,6 +1,6 @@
 # roll-quote-crm · AIREADME
-> 卷材（低温胶等）按卷报价 + 客户下单解析 + 送货单 + 月度统计的本地桌面 CRM ｜ 生命周期: planned
-> last-synced: ⚑ 首 commit 后回填 SHA · 2026-06-07
+> 卷材（低温胶等）按卷报价 + 客户下单解析 + 送货单 + 月度统计的本地桌面 CRM ｜ 生命周期: in-progress（Phase 1 核心已完成）
+> last-synced: 877c8fe · 2026-06-07
 
 <!-- 路由器：只指路，不放实质内容。INDEX 不列自己。任何文件增减/状态变都更新这里。符号：✅已填 / ⚑占位 / —N/A -->
 
@@ -15,8 +15,8 @@
 | PRD | ✅ | 产品意图 / 用户问题 / UX 哲学 |
 | ROADMAP | ✅ | Now/Next/Later |
 | CONVENTIONS | ✅ | 计价取整 / 命名 / 中文标点 |
-| DECISIONS | ✅ | 4 条立项决策 |
-| MEMORY | ⚑ | 暂空，踩坑后追加 |
+| DECISIONS | ✅ | 5 条决策（D1-D5，D5 推翻 D3 改 Electron）|
+| MEMORY | ✅ | round bug / 解析静默猜值 / Electron 镜像 等踩坑 |
 | CHANGELOG | ⚑ | 未 release |
 
 ## 按任务读

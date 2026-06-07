@@ -8,15 +8,18 @@
 export const SQM_PER_ROLL = 21;
 
 /**
- * 四舍五入到指定小数位（默认 2 位），含浮点边界修正。
- * 加 Number.EPSILON 修正如 1.005 这类二进制浮点表示偏小导致的错舍。
+ * 四舍五入到指定小数位（默认 2 位），含浮点边界修正，对负数对称（half away from zero）。
+ * 不能用「abs + Number.EPSILON」：绝对补偿量（EPSILON×factor ≈ 2.2e-14）对多数「分半」值
+ * 的二进制偏差偏小，会少进位（如 8.575 错舍成 8.57）。改为先把 abs×factor 用 toFixed 削掉
+ * 尾部浮点噪声、再 Math.round，这对货币 2 位取整稳定可靠。
  */
 export function round(value: number, digits = 2): number {
   if (!Number.isFinite(value)) throw new Error('round: value 必须是有限数');
   const factor = 10 ** digits;
   const sign = value < 0 ? -1 : 1;
   const abs = Math.abs(value);
-  return (sign * Math.round((abs + Number.EPSILON) * factor)) / factor;
+  const scaled = Number((abs * factor).toFixed(8));
+  return (sign * Math.round(scaled)) / factor;
 }
 
 /** 面积（㎡）= (宽mm/1000) × (长mm/1000)。宽长可交换，不影响结果。 */
@@ -124,6 +127,8 @@ export function amountToChinese(amount: number): string {
   const n = round(Math.abs(amount), 2);
 
   const integerPart = Math.floor(n);
+  // BIG_UNITS 最高到「兆」，>= 10^16 会越界产出 'undefined'，明确拒绝而非静默出错。
+  if (integerPart >= 1e16) throw new Error('amountToChinese: 金额超出可表示范围（兆级）');
   const fenTotal = Math.round((n - integerPart) * 100);
   const jiao = Math.floor(fenTotal / 10);
   const fen = fenTotal % 10;

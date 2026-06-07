@@ -12,6 +12,16 @@ describe('round 取整', () => {
     expect(round(2.344, 2)).toBe(2.34);
     expect(round(0.005, 2)).toBe(0.01);
   });
+  it('分半进位：EPSILON 旧实现失效的历史用例（回归）', () => {
+    expect(round(8.575, 2)).toBe(8.58);
+    expect(round(2.135, 2)).toBe(2.14);
+    expect(round(2.385, 2)).toBe(2.39);
+    expect(round(4.015, 2)).toBe(4.02);
+  });
+  it('负数对称取整', () => {
+    expect(round(-1.005, 2)).toBe(-1.01);
+    expect(round(-8.575, 2)).toBe(-8.58);
+  });
   it('非有限数抛错', () => {
     expect(() => round(Infinity)).toThrow();
     expect(() => round(NaN)).toThrow();
@@ -98,5 +108,18 @@ describe('amountToChinese 中文大写', () => {
   });
   it('只有角：50.5 → 人民币伍拾元伍角', () => {
     expect(amountToChinese(50.5)).toBe('人民币伍拾元伍角');
+  });
+  it('零元小额：0.05 → 人民币零元伍分；0.5 → 人民币零元伍角', () => {
+    expect(amountToChinese(0.05)).toBe('人民币零元伍分');
+    expect(amountToChinese(0.5)).toBe('人民币零元伍角');
+  });
+  it('负数金额：-100.5 → 人民币负壹佰元伍角', () => {
+    expect(amountToChinese(-100.5)).toBe('人民币负壹佰元伍角');
+  });
+  it('亿级整额：100000000 → 人民币壹亿元整', () => {
+    expect(amountToChinese(100000000)).toBe('人民币壹亿元整');
+  });
+  it('超出兆级（>=10^16）抛错，不产出 undefined', () => {
+    expect(() => amountToChinese(1e16)).toThrow();
   });
 });

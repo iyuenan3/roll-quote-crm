@@ -4,7 +4,7 @@
 > 本文件是 bootstrap router：只放状态 / 路由 / 红线指针 / 维护责任 / 命令。详细真相源在 `AIREADME/`（先读 `AIREADME/INDEX.md`）。
 
 ## 当前状态
-planned（2026-06-07 立项）。pre-code。下一步：计价 / 解析纯函数核心 + 单测。
+in-progress。Phase 1 已完成：计价 / 解析纯函数核心 + 单测（commit 877c8fe）。下一步：Phase 2 DB schema + 业务 UI（见 `AIREADME/ROADMAP` Next）。
 
 ## 加载路由（任务 → 读 AIREADME）
 
@@ -30,7 +30,11 @@ planned（2026-06-07 立项）。pre-code。下一步：计价 / 解析纯函数
 - release / 里程碑 → `CHANGELOG`（append）
 
 ## 常用命令
-（待 Electron 脚手架搭好后补：dev / test / build）
+- `npm run dev`：启动 Electron 桌面应用（开发）
+- `npm test`：跑核心单元测试（vitest）
+- `npm run typecheck`：类型检查
+- `npm run build`：构建三进程产物
+- 国内装 Electron 二进制需镜像：`ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" npm install --registry=https://registry.npmmirror.com`
 
 ## 元信息
 - git 主分支 main。commit 仅在用户要求时。

@@ -1,7 +1,10 @@
 # ARCHITECTURE · roll-quote-crm
 
+> 实现状态（截至 commit 877c8fe）：本文件描述目标架构。当前仅 Phase 1 落地（Electron 脚手架 + `src/core` 计价 / 解析纯函数 + 单测）。下方「数据模型」「数据流中 SQLite 及之后环节」「关键模块」中标 ⚑ 者为 Phase 2 计划，尚未实现。
+
 ## 技术栈
 Electron + React + Vite + TypeScript + SQLite（better-sqlite3，主进程同步读写）。本地单机、离线、双击启动。Electron 自带 Chromium 渲染器，打印走 `window.print()`，Mac 开发所见即≈Windows 效果。选型理由见 DECISIONS D5（推翻 D3）。
+注：better-sqlite3 于 Phase 2 引入，Phase 1 尚未列入 package.json 依赖。
 
 ## 组件 + 数据流
 
@@ -24,7 +27,7 @@ SQLite（orders + order_items，快照 roll_price_used）
    └─►  统计聚合查询（客户 / 产品 × 月）
 ```
 
-## 数据模型（SQLite）
+## 数据模型（SQLite）⚑ Phase 2 计划，尚未建表
 - company（单行）：name, address, phone, terms
 - customers：id, name, phone, address, created_at
 - products：id, code, name（唯一）, aliases, spec_note, default_unit, created_at
@@ -33,11 +36,11 @@ SQLite（orders + order_items，快照 roll_price_used）
 - order_items：id, order_id, product_id, raw_spec, width_mm, height_mm, qty, unit, area_sqm, roll_price_used, unit_price, amount, is_manual, remark
 
 ## 关键模块
-- `src/core/pricing.ts`：计价 + 中文大写金额。纯函数 + 单测。
-- `src/core/parse-order.ts`：模板解析 + 品名匹配。纯函数 + 单测。
-- DB 层：schema + DAO + 统计聚合查询。
-- `src/print/DeliveryNote.tsx` + 打印 CSS：送货单视图。
-- `src/pages/{Customers,Products,Quotes,NewOrder,Orders,Stats,Settings}.tsx`
+- ✅ `src/core/pricing.ts`：计价 + 中文大写金额。纯函数 + 单测。
+- ✅ `src/core/parse-order.ts`：模板解析 + 品名匹配。纯函数 + 单测。
+- ⚑ DB 层：schema + DAO + 统计聚合查询。
+- ⚑ `src/print/DeliveryNote.tsx` + 打印 CSS：送货单视图。
+- ⚑ `src/pages/{Customers,Products,Quotes,NewOrder,Orders,Stats,Settings}.tsx`
 
 ## 禁改项
 - 计价 / 解析必须留在 `src/core` 纯函数，UI 只调用、不内联算法。

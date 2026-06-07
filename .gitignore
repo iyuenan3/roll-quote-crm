@@ -10,3 +10,8 @@ dist/
 *.sqlite3
 .env
 .env.*
+
+# Phase 2 导出 / 备份产物（含真实客户数据，绝不入库）
+/exports/
+/backups/
+*.bak

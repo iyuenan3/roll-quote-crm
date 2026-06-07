@@ -3,4 +3,8 @@
 ⚑ 未 release。首个里程碑后倒序记版本块（Added / Changed / Fixed / Removed / Deprecated），理由链 DECISIONS。
 
 ## Unreleased
-- 立项（2026-06-07）：建仓 + AIREADME + 计划确定。代码未开工。
+- Phase 1（2026-06-07，commit 877c8fe）：
+  - Added：Electron + React + Vite + TS 脚手架；`src/core/pricing.ts`（计价 + 中文大写）与 `src/core/parse-order.ts`（模板解析 + 品名匹配）纯函数 + vitest 单测。
+  - Changed：技术栈 Tauri → Electron（DECISIONS D5 推翻 D3）。
+  - Fixed（审查后）：round() 分半进位 bug（EPSILON 改 toFixed）；解析器小数静默截断、品名内 数字x数字 吞尺寸、空品名 fuzzy 误绑、fuzzy 多命中歧义，均改为报错 / 告警。
+- 立项（2026-06-07）：建仓 + AIREADME + 计划确定。
