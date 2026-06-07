@@ -16,6 +16,8 @@ import {
   listQuoteHistory,
   createOrder,
   getOrder,
+  listOrders,
+  voidOrder,
 } from '../db';
 
 let db: DB | null = null;
@@ -58,6 +60,8 @@ const handlers: Record<string, (arg: any) => unknown> = {
   'db:listQuoteHistory': (a) => listQuoteHistory(getDb(), a.customerId, a.productId),
   'db:createOrder': (i) => createOrder(getDb(), i),
   'db:getOrder': (a) => getOrder(getDb(), a.id),
+  'db:listOrders': () => listOrders(getDb()),
+  'db:voidOrder': (a) => voidOrder(getDb(), a.id),
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 

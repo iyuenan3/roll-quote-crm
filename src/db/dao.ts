@@ -54,6 +54,7 @@ export interface OrderItem {
   id: number;
   orderId: number;
   productId: number | null;
+  productName: string;
   rawSpec: string;
   widthMm: number;
   heightMm: number;
@@ -105,6 +106,7 @@ function toOrderItem(r: any): OrderItem {
     id: r.id,
     orderId: r.order_id,
     productId: r.product_id,
+    productName: r.product_name,
     rawSpec: r.raw_spec,
     widthMm: r.width_mm,
     heightMm: r.height_mm,
@@ -237,6 +239,7 @@ export function listQuoteHistory(db: DB, customerId: number, productId: number):
 // ---------- orders（红线：快照 roll_price_used，历史不回改）----------
 export interface NewOrderItem {
   productId?: number | null;
+  productName?: string;
   rawSpec: string;
   widthMm: number;
   heightMm: number;
@@ -278,13 +281,14 @@ export function createOrder(
     const orderId = Number(r.lastInsertRowid);
     const insItem = db.prepare(
       `INSERT INTO order_items
-        (order_id, product_id, raw_spec, width_mm, height_mm, qty, unit, area_sqm, roll_price_used, unit_price, amount, is_manual, remark)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (order_id, product_id, product_name, raw_spec, width_mm, height_mm, qty, unit, area_sqm, roll_price_used, unit_price, amount, is_manual, remark)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     for (const it of o.items) {
       insItem.run(
         orderId,
         it.productId ?? null,
+        it.productName ?? '',
         it.rawSpec,
         it.widthMm,
         it.heightMm,
@@ -321,4 +325,41 @@ export function getOrder(db: DB, id: number): { order: Order; items: OrderItem[]
     db.prepare('SELECT * FROM order_items WHERE order_id = ? ORDER BY id').all(id) as any[]
   ).map(toOrderItem);
   return { order, items };
+}
+
+export interface ListedOrder {
+  id: number;
+  orderNo: string;
+  customerId: number;
+  customerName: string;
+  orderDate: string;
+  totalAmount: number;
+  status: string;
+  createdAt: string;
+}
+
+export function listOrders(db: DB): ListedOrder[] {
+  return (
+    db
+      .prepare(
+        `SELECT o.*, c.name AS customer_name
+         FROM orders o JOIN customers c ON c.id = o.customer_id
+         ORDER BY o.id DESC`,
+      )
+      .all() as any[]
+  ).map((r) => ({
+    id: r.id,
+    orderNo: r.order_no,
+    customerId: r.customer_id,
+    customerName: r.customer_name,
+    orderDate: r.order_date,
+    totalAmount: r.total_amount,
+    status: r.status,
+    createdAt: r.created_at,
+  }));
+}
+
+/** 作废订单：改 status 而非物理删，已计入历史的订单只可作废（保留快照）。 */
+export function voidOrder(db: DB, id: number): void {
+  db.prepare("UPDATE orders SET status = 'void' WHERE id = ?").run(id);
 }

@@ -11,6 +11,8 @@ import {
   listQuoteHistory,
   createOrder,
   getOrder,
+  listOrders,
+  voidOrder,
   getCompany,
   upsertCompany,
 } from './index';
@@ -223,5 +225,34 @@ describe('DB 加固（审查后补测）', () => {
     expect(listProducts(db).find((x) => x.id === id)?.aliases).toEqual(['a"b', '逗,号', '换\n行', '😀']);
     db.prepare("UPDATE products SET aliases = 'not-json' WHERE id = ?").run(id);
     expect(listProducts(db).find((x) => x.id === id)?.aliases).toEqual([]); // 不崩，降级
+  });
+
+  it('listOrders 带客户名、按 id 倒序；voidOrder 改状态不删', () => {
+    setQuote(db, { customerId: cid, productId: pid, rollPrice: 100 });
+    const o1 = createOrder(db, { orderNo: 'O-1', customerId: cid, items: [okItem()] });
+    createOrder(db, { orderNo: 'O-2', customerId: cid, items: [okItem()] });
+    const list = listOrders(db);
+    expect(list.map((o) => o.orderNo)).toEqual(['O-2', 'O-1']); // 倒序
+    expect(list[0].customerName).toBe('张三'); // JOIN 出客户名
+    expect(list.every((o) => o.status === 'active')).toBe(true);
+
+    voidOrder(db, o1);
+    const after = listOrders(db);
+    expect(after).toHaveLength(2); // 不物理删
+    expect(after.find((o) => o.id === o1)?.status).toBe('void');
+  });
+
+  it('品名快照入库（产品改名 / 删产品后仍可读出当时品名）', () => {
+    setQuote(db, { customerId: cid, productId: pid, rollPrice: 100 });
+    const oid = createOrder(db, {
+      orderNo: 'O-SNAP',
+      customerId: cid,
+      items: [okItem({ productName: '05纯低温胶' })],
+    });
+    expect(getOrder(db, oid)!.items[0].productName).toBe('05纯低温胶');
+  });
+
+  it('迁移：openDb 后 user_version = 1', () => {
+    expect(db.pragma('user_version', { simple: true })).toBe(1);
   });
 });

@@ -8,10 +8,20 @@ import type {
   Order,
   OrderItem,
   NewOrderItem,
+  ListedOrder,
 } from '../db/dao';
 
 // 给渲染进程复用领域模型（渲染层从 shared 取类型，不直接 import db 层）
-export type { Company, Customer, Product, Quote, Order, OrderItem, NewOrderItem } from '../db/dao';
+export type {
+  Company,
+  Customer,
+  Product,
+  Quote,
+  Order,
+  OrderItem,
+  NewOrderItem,
+  ListedOrder,
+} from '../db/dao';
 
 export interface DbApi {
   getCompany(): Promise<Company>;
@@ -44,6 +54,8 @@ export interface DbApi {
     items: NewOrderItem[];
   }): Promise<number>;
   getOrder(a: { id: number }): Promise<{ order: Order; items: OrderItem[] } | undefined>;
+  listOrders(): Promise<ListedOrder[]>;
+  voidOrder(a: { id: number }): Promise<void>;
 }
 
 export interface Api {

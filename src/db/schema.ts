@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   order_id        INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   product_id      INTEGER REFERENCES products(id),
+  product_name    TEXT    NOT NULL DEFAULT '',   -- 快照下单时品名（产品改名 / 手动行不丢）
   raw_spec        TEXT    NOT NULL DEFAULT '',
   width_mm        REAL    NOT NULL CHECK (width_mm > 0),
   height_mm       REAL    NOT NULL CHECK (height_mm > 0),

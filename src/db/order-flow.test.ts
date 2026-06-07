@@ -47,6 +47,7 @@ describe('order flow 端到端（parse → quote → price → persist → read�
       });
       return {
         productId: pid,
+        productName: it.productName,
         rawSpec: it.rawSpec,
         widthMm: it.widthMm,
         heightMm: it.heightMm,
@@ -77,7 +78,9 @@ describe('order flow 端到端（parse → quote → price → persist → read�
     expect(saved.items[2].amount).toBe(2200);
     // 单价 3 位、金额取整（D6）：2500×893 21张 → 单价 10.631
     expect(saved.items[0].unitPrice).toBe(10.631);
-    expect(saved.items[0].rollPriceUsed).toBe(100); // 快照
+    expect(saved.items[0].rollPriceUsed).toBe(100); // 报价快照
+    expect(saved.items[0].productName).toBe('05纯低温胶'); // 品名快照
+    expect(saved.items[2].productName).toBe('06纯低温胶');
 
     const expectedTotal = items.reduce((s, x) => s + x.amount, 0);
     expect(saved.order.totalAmount).toBe(expectedTotal);

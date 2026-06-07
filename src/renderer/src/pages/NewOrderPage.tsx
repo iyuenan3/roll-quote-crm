@@ -145,6 +145,7 @@ export function NewOrderPage() {
     try {
       const items: NewOrderItem[] = rows.map((r) => ({
         productId: r.productId,
+        productName: r.productName,
         rawSpec: r.rawSpec,
         widthMm: r.widthMm,
         heightMm: r.heightMm,

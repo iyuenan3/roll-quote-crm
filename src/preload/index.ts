@@ -14,6 +14,8 @@ const db: Api['db'] = {
   listQuoteHistory: (a) => ipcRenderer.invoke('db:listQuoteHistory', a),
   createOrder: (i) => ipcRenderer.invoke('db:createOrder', i),
   getOrder: (a) => ipcRenderer.invoke('db:getOrder', a),
+  listOrders: () => ipcRenderer.invoke('db:listOrders'),
+  voidOrder: (a) => ipcRenderer.invoke('db:voidOrder', a),
 };
 
 contextBridge.exposeInMainWorld('api', { db } satisfies Api);

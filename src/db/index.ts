@@ -13,7 +13,27 @@ export function openDb(filename = ':memory:'): DB {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA_SQL);
+  migrate(db);
   return db;
+}
+
+/**
+ * 最小迁移：用 PRAGMA user_version 记 schema 版本，按版本顺序补差异。
+ * 新库已由 SCHEMA_SQL 建全，旧库（pre-release dev 库）在此补列。幂等。
+ */
+function migrate(db: DB): void {
+  const v = (db.pragma('user_version', { simple: true }) as number) || 0;
+
+  if (v < 1) {
+    // v1：order_items.product_name（早期版本无此列）
+    const cols = (db.prepare('PRAGMA table_info(order_items)').all() as { name: string }[]).map(
+      (c) => c.name,
+    );
+    if (!cols.includes('product_name')) {
+      db.exec("ALTER TABLE order_items ADD COLUMN product_name TEXT NOT NULL DEFAULT ''");
+    }
+    db.pragma('user_version = 1');
+  }
 }
 
 export * from './dao';
