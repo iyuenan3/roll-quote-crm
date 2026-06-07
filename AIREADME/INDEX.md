@@ -15,7 +15,7 @@
 | PRD | ✅ | 产品意图 / 用户问题 / UX 哲学 |
 | ROADMAP | ✅ | Now/Next/Later |
 | CONVENTIONS | ✅ | 计价取整 / 命名 / 中文标点 |
-| DECISIONS | ✅ | 5 条决策（D1-D5，D5 推翻 D3 改 Electron）|
+| DECISIONS | ✅ | 6 条决策（D1-D6；D5 推翻 D3 改 Electron，D6 单价 3 位 / 金额取整）|
 | MEMORY | ✅ | round bug / 解析静默猜值 / Electron 镜像 等踩坑 |
 | CHANGELOG | ⚑ | 未 release |
 

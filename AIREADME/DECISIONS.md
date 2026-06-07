@@ -36,3 +36,10 @@
 - Why D3 不再成立: D3 否决 Electron 的两条理由在本约束下失效。其一「体积大」，单机自用工具不在意安装包体积；其二「精细打印控制优势在 D2 后失去意义」，本就不需要。反之 Electron 自带 Chromium 渲染器，Mac 开发所见即≈Windows 效果，打印高保真、跨平台一致，且打包链路（electron-builder）对纯 JS 全栈最成熟，零 Rust 门槛。
 - Alternatives: 保持 Tauri + CI 交叉编译（否决：Rust 交叉编译 + WebView2 + 安装包工具链对不熟 Rust 者门槛高，且 webview 打印跨平台不一致）。
 - Tradeoff: 安装包体积变大（约 100MB 级），换来 Mac→Windows 的开发、打包、打印一致性与零 Rust 门槛。
+
+## D6 · 2026-06-07 · 单价取 3 位小数、金额四舍五入到整数
+- Problem: 业务方（商家）要求单价精确到小数点后 3 位、金额四舍五入到整数（元）。原约定（CONVENTIONS）为两者均 2 位小数。
+- Constraint: 计价公式不可变（每卷报价 × 面积 ÷ 21 × 张数、一卷 = 21㎡、二维报价、未截断单价乘）。本次仅改「输出取整精度」，不动公式，故未违反「计价口径不可变」红线。
+- Decision: unit_price = round(rawUnit, 3)；amount = round(rawUnit × qty, 0)，仍以未截断单价乘张数后取整到元。常量见 `pricing.ts` 的 UNIT_PRICE_DECIMALS / AMOUNT_DECIMALS。
+- Alternatives: 金额用「显示的 3 位单价 × 数量」再取整（否决：违反未截断红线；且 3 位精度下两种算法差异可忽略）。
+- Tradeoff: 送货单上「单价 × 数量」与整数金额可能有不超过 1 元的视觉差（金额取整所致，以金额为准）。

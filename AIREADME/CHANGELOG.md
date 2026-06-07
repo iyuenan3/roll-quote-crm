@@ -3,6 +3,8 @@
 ⚑ 未 release。首个里程碑后倒序记版本块（Added / Changed / Fixed / Removed / Deprecated），理由链 DECISIONS。
 
 ## Unreleased
+- 计价精度调整（2026-06-07，DECISIONS D6）：单价 round 到 3 位小数，金额四舍五入到整数元（原均 2 位）。公式与「未截断单价乘」不变。
+
 - Phase 1（2026-06-07，commit 877c8fe）：
   - Added：Electron + React + Vite + TS 脚手架；`src/core/pricing.ts`（计价 + 中文大写）与 `src/core/parse-order.ts`（模板解析 + 品名匹配）纯函数 + vitest 单测。
   - Changed：技术栈 Tauri → Electron（DECISIONS D5 推翻 D3）。

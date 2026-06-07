@@ -24,8 +24,8 @@
 
 ```
 area_sqm   = (width_mm/1000) × (height_mm/1000)
-unit_price = round(roll_price × area_sqm ÷ 21, 2)
-amount     = round(roll_price × area_sqm ÷ 21 × qty, 2)
+unit_price = round(roll_price × area_sqm ÷ 21, 3)        // 精确到小数点后 3 位（D6）
+amount     = round(roll_price × area_sqm ÷ 21 × qty, 0)  // 四舍五入到整数元（D6），用未截断单价乘
 ```
 
 - roll_price = 该「客户 × 产品」当前 is_current 报价（每卷价，卷 = 21㎡）。

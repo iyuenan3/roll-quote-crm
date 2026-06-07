@@ -17,8 +17,8 @@ export function App() {
 
       <h3>计价样例：100 元/卷，2100×1000mm，5 张</h3>
       <p>
-        面积 {demo.areaSqm} ㎡，单价 {demo.unitPrice.toFixed(2)} 元，金额{' '}
-        {demo.amount.toFixed(2)} 元
+        面积 {demo.areaSqm} ㎡，单价 {demo.unitPrice.toFixed(3)} 元，金额{' '}
+        {demo.amount.toFixed(0)} 元
       </p>
       <p>大写：{amountToChinese(demo.amount)}</p>
 

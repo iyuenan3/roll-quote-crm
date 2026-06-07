@@ -7,6 +7,11 @@
 /** 一卷的面积（㎡）。计价口径常量，不可变。 */
 export const SQM_PER_ROLL = 21;
 
+/** 单价取整位数：3 位小数（业务方要求，见 DECISIONS D6）。 */
+export const UNIT_PRICE_DECIMALS = 3;
+/** 金额取整位数：0 位，即四舍五入到整数元（业务方要求，见 DECISIONS D6）。 */
+export const AMOUNT_DECIMALS = 0;
+
 /**
  * 四舍五入到指定小数位（默认 2 位），含浮点边界修正，对负数对称（half away from zero）。
  * 不能用「abs + Number.EPSILON」：绝对补偿量（EPSILON×factor ≈ 2.2e-14）对多数「分半」值
@@ -47,22 +52,23 @@ export interface PriceResult {
 
 /**
  * 计算单行价格。张 / 卷同一公式：整卷面积 ≈ 21㎡ 时单价自然退化为每卷报价。
+ * 取整精度见 DECISIONS D6：单价 3 位小数，金额四舍五入到整数。公式本身不变。
  *   area_sqm   = (宽/1000) × (长/1000)
- *   unit_price = round(roll_price × area ÷ 21, 2)
- *   amount     = round(roll_price × area ÷ 21 × qty, 2)   // 用未截断单价乘
+ *   unit_price = round(roll_price × area ÷ 21, 3)
+ *   amount     = round(roll_price × area ÷ 21 × qty, 0)   // 用未截断单价乘，再取整到元
  */
 export function computeRow(input: PriceInput): PriceResult {
   const area = areaSqm(input.widthMm, input.heightMm);
 
   if (input.isManual) {
-    const unitPrice = round(input.manualUnitPrice ?? 0, 2);
-    const amount = round(input.manualAmount ?? unitPrice * input.qty, 2);
+    const unitPrice = round(input.manualUnitPrice ?? 0, UNIT_PRICE_DECIMALS);
+    const amount = round(input.manualAmount ?? unitPrice * input.qty, AMOUNT_DECIMALS);
     return { areaSqm: area, unitPrice, amount };
   }
 
   const rawUnit = (input.rollPrice * area) / SQM_PER_ROLL;
-  const unitPrice = round(rawUnit, 2);
-  const amount = round(rawUnit * input.qty, 2); // 注意：用 rawUnit 而非 unitPrice
+  const unitPrice = round(rawUnit, UNIT_PRICE_DECIMALS);
+  const amount = round(rawUnit * input.qty, AMOUNT_DECIMALS); // 注意：用 rawUnit 而非 unitPrice
   return { areaSqm: area, unitPrice, amount };
 }
 

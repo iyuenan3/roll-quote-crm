@@ -38,18 +38,25 @@ describe('areaSqm 面积', () => {
 });
 
 describe('computeRow 计价', () => {
-  it('干净例：100 元/卷，2100×1000mm，5 张 → area 2.1 / unit 10.00 / amount 50.00', () => {
+  it('干净例：100 元/卷，2100×1000mm，5 张 → area 2.1 / unit 10.000 / amount 50', () => {
     const r = computeRow({ rollPrice: 100, widthMm: 2100, heightMm: 1000, qty: 5 });
     expect(r.areaSqm).toBe(2.1);
     expect(r.unitPrice).toBe(10);
     expect(r.amount).toBe(50);
   });
 
-  it('整卷例：100 元/卷，420×50000mm，22 卷 → area 21 / unit 100.00 / amount 2200.00', () => {
+  it('整卷例：100 元/卷，420×50000mm，22 卷 → area 21 / unit 100.000 / amount 2200', () => {
     const r = computeRow({ rollPrice: 100, widthMm: 420, heightMm: 50000, qty: 22 });
     expect(r.areaSqm).toBe(SQM_PER_ROLL);
     expect(r.unitPrice).toBe(100);
     expect(r.amount).toBe(2200);
+  });
+
+  it('D6 精度：单价 3 位 / 金额取整：100 元/卷，2500×893mm，1 张 → unit 10.631 / amount 11', () => {
+    const r = computeRow({ rollPrice: 100, widthMm: 2500, heightMm: 893, qty: 1 });
+    // rawUnit = 100 × 2.2325 / 21 = 10.630952...
+    expect(r.unitPrice).toBe(10.631); // 3 位小数
+    expect(r.amount).toBe(11); // round(10.63...) = 11，四舍五入到整数元
   });
 
   it('宽长顺序不影响计价', () => {
@@ -58,11 +65,11 @@ describe('computeRow 计价', () => {
     expect(b).toEqual(a);
   });
 
-  it('amount 用未截断单价乘，避免累积误差：100 元/卷，700×100mm，3 张 → unit 0.33 / amount 1.00', () => {
+  it('amount 用未截断单价乘，避免累积误差：100 元/卷，700×100mm，3 张 → unit 0.333 / amount 1', () => {
     const r = computeRow({ rollPrice: 100, widthMm: 700, heightMm: 100, qty: 3 });
     // rawUnit = 100 × 0.07 / 21 = 0.33333...
-    expect(r.unitPrice).toBe(0.33); // 截断显示
-    expect(r.amount).toBe(1); // round(0.99999...) = 1.00，而非截断后 0.33×3 = 0.99
+    expect(r.unitPrice).toBe(0.333); // 3 位小数
+    expect(r.amount).toBe(1); // round(0.99999...) = 1，用未截断单价乘再取整
   });
 
   it('边界 0：数量 0 → 金额 0；报价 0 → 单价金额 0', () => {
