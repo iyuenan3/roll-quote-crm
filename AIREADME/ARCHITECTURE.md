@@ -38,7 +38,8 @@ SQLite（orders + order_items，快照 roll_price_used）
 ## 关键模块
 - ✅ `src/core/pricing.ts`：计价 + 中文大写金额。纯函数 + 单测。
 - ✅ `src/core/parse-order.ts`：模板解析 + 品名匹配。纯函数 + 单测。
-- ⚑ DB 层：schema + DAO + 统计聚合查询。
+- ✅ `src/db/`：schema + DAO（catalog / quotes / orders）+ 红线单测。统计聚合查询 ⚑ 待建。
+- ✅ DB IPC 桥：`src/main/db-service.ts`（主进程持库 + ipcMain.handle + 错误脱敏）、`src/preload/index.ts`（contextBridge 暴露 window.api）、`src/shared/api.ts`（IPC 类型契约）。渲染进程经 window.api 调用，不直接碰 Node / DB。
 - ⚑ `src/print/DeliveryNote.tsx` + 打印 CSS：送货单视图。
 - ⚑ `src/pages/{Customers,Products,Quotes,NewOrder,Orders,Stats,Settings}.tsx`
 

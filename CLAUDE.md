@@ -30,11 +30,16 @@ in-progress。Phase 1 已完成：计价 / 解析纯函数核心 + 单测（comm
 - release / 里程碑 → `CHANGELOG`（append）
 
 ## 常用命令
-- `npm run dev`：启动 Electron 桌面应用（开发）
-- `npm test`：跑核心单元测试（vitest）
+- `npm run dev`：启动 Electron 桌面应用（已自动 rebuild:electron 把 better-sqlite3 切 Electron ABI）
+- `npm test`：跑 core + db 单元测试（vitest，需 Node ABI）
 - `npm run typecheck`：类型检查
 - `npm run build`：构建三进程产物
 - 国内装 Electron 二进制需镜像：`ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" npm install --registry=https://registry.npmmirror.com`
+
+### better-sqlite3 双 ABI（原生模块，重要）
+- better-sqlite3 的 Node ABI 与 Electron ABI 不通用，同一份编译产物不能两边用。
+- 跑过 `npm run dev`（切 Electron ABI）后，再 `npm test` 会因 ABI 不符报错，先 `npm run rebuild:node` 切回。
+- 反之 `npm run dev` 已内置 `rebuild:electron`，无需手动。
 
 ## 元信息
 - git 主分支 main。commit 仅在用户要求时。

@@ -1,0 +1,48 @@
+// 渲染进程 ↔ 主进程的 IPC 契约（仅类型，无运行时代码）。
+// preload 按此实现 window.api，renderer 按此调用。从 dao 复用领域模型（import type，编译期擦除，不会把 better-sqlite3 带进渲染进程）。
+import type {
+  Company,
+  Customer,
+  Product,
+  Quote,
+  Order,
+  OrderItem,
+  NewOrderItem,
+} from '../db/dao';
+
+export interface DbApi {
+  getCompany(): Promise<Company>;
+  upsertCompany(c: Company): Promise<void>;
+  listCustomers(): Promise<Customer[]>;
+  createCustomer(i: { name: string; phone?: string; address?: string }): Promise<number>;
+  listProducts(): Promise<Product[]>;
+  createProduct(i: {
+    name: string;
+    code?: string;
+    aliases?: string[];
+    specNote?: string;
+    defaultUnit?: string;
+  }): Promise<number>;
+  setQuote(i: {
+    customerId: number;
+    productId: number;
+    rollPrice: number;
+    effectiveDate?: string;
+    note?: string;
+  }): Promise<number>;
+  getCurrentQuote(a: { customerId: number; productId: number }): Promise<Quote | undefined>;
+  listQuoteHistory(a: { customerId: number; productId: number }): Promise<Quote[]>;
+  createOrder(i: {
+    orderNo: string;
+    customerId: number;
+    orderDate?: string;
+    remark?: string;
+    status?: string;
+    items: NewOrderItem[];
+  }): Promise<number>;
+  getOrder(a: { id: number }): Promise<{ order: Order; items: OrderItem[] } | undefined>;
+}
+
+export interface Api {
+  db: DbApi;
+}
