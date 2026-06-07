@@ -1,0 +1,12 @@
+node_modules/
+out/
+dist/
+*.log
+.DS_Store
+
+# 本地数据 / 密钥（Phase 2 起防误传真实数据）
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.*
