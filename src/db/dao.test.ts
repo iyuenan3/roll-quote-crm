@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import Database from 'better-sqlite3';
 import {
   openDb,
+  migrate,
   type DB,
   createCustomer,
   createProduct,
@@ -254,5 +256,32 @@ describe('DB 加固（审查后补测）', () => {
 
   it('迁移：openDb 后 user_version = 1', () => {
     expect(db.pragma('user_version', { simple: true })).toBe(1);
+  });
+});
+
+describe('migrate 旧库补列（回归）', () => {
+  it('无 product_name 的旧 order_items：补列、保数据、幂等、user_version=1', () => {
+    const old = new Database(':memory:');
+    old.exec('CREATE TABLE order_items (id INTEGER PRIMARY KEY, order_id INTEGER, remark TEXT)');
+    old.prepare('INSERT INTO order_items (order_id, remark) VALUES (?, ?)').run(1, '旧备注');
+    old.pragma('user_version = 0');
+
+    migrate(old);
+    const cols = (old.prepare('PRAGMA table_info(order_items)').all() as { name: string }[]).map(
+      (c) => c.name,
+    );
+    expect(cols).toContain('product_name');
+    const row = old.prepare('SELECT * FROM order_items').get() as { remark: string; product_name: string };
+    expect(row.remark).toBe('旧备注'); // 原数据不丢
+    expect(row.product_name).toBe(''); // 默认空
+    expect(old.pragma('user_version', { simple: true })).toBe(1);
+
+    migrate(old); // 再跑幂等
+    expect(old.pragma('user_version', { simple: true })).toBe(1);
+    const cols2 = (old.prepare('PRAGMA table_info(order_items)').all() as { name: string }[]).map(
+      (c) => c.name,
+    );
+    expect(cols2.filter((c) => c === 'product_name')).toHaveLength(1); // 不重复加列
+    old.close();
   });
 });

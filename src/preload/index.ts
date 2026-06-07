@@ -16,6 +16,9 @@ const db: Api['db'] = {
   getOrder: (a) => ipcRenderer.invoke('db:getOrder', a),
   listOrders: () => ipcRenderer.invoke('db:listOrders'),
   voidOrder: (a) => ipcRenderer.invoke('db:voidOrder', a),
+  listOrderMonths: () => ipcRenderer.invoke('db:listOrderMonths'),
+  statsByCustomerMonth: (a) => ipcRenderer.invoke('db:statsByCustomerMonth', a),
+  statsByProductMonth: (a) => ipcRenderer.invoke('db:statsByProductMonth', a),
 };
 
 contextBridge.exposeInMainWorld('api', { db } satisfies Api);

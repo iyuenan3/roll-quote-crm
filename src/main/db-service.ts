@@ -18,6 +18,9 @@ import {
   getOrder,
   listOrders,
   voidOrder,
+  listOrderMonths,
+  statsByCustomerMonth,
+  statsByProductMonth,
 } from '../db';
 
 let db: DB | null = null;
@@ -62,6 +65,9 @@ const handlers: Record<string, (arg: any) => unknown> = {
   'db:getOrder': (a) => getOrder(getDb(), a.id),
   'db:listOrders': () => listOrders(getDb()),
   'db:voidOrder': (a) => voidOrder(getDb(), a.id),
+  'db:listOrderMonths': () => listOrderMonths(getDb()),
+  'db:statsByCustomerMonth': (a) => statsByCustomerMonth(getDb(), a?.ym),
+  'db:statsByProductMonth': (a) => statsByProductMonth(getDb(), a?.ym),
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 

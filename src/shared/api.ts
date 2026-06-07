@@ -9,6 +9,8 @@ import type {
   OrderItem,
   NewOrderItem,
   ListedOrder,
+  CustomerMonthStat,
+  ProductMonthStat,
 } from '../db/dao';
 
 // 给渲染进程复用领域模型（渲染层从 shared 取类型，不直接 import db 层）
@@ -21,6 +23,8 @@ export type {
   OrderItem,
   NewOrderItem,
   ListedOrder,
+  CustomerMonthStat,
+  ProductMonthStat,
 } from '../db/dao';
 
 export interface DbApi {
@@ -55,7 +59,10 @@ export interface DbApi {
   }): Promise<number>;
   getOrder(a: { id: number }): Promise<{ order: Order; items: OrderItem[] } | undefined>;
   listOrders(): Promise<ListedOrder[]>;
-  voidOrder(a: { id: number }): Promise<void>;
+  voidOrder(a: { id: number }): Promise<number>;
+  listOrderMonths(): Promise<string[]>;
+  statsByCustomerMonth(a: { ym?: string }): Promise<CustomerMonthStat[]>;
+  statsByProductMonth(a: { ym?: string }): Promise<ProductMonthStat[]>;
 }
 
 export interface Api {

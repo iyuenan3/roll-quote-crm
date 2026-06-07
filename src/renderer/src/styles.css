@@ -244,21 +244,22 @@ tbody tr:hover {
   text-align: center;
 }
 
-/* ---- 打印：只出送货单，隐藏应用其余部分 ---- */
+/* ---- 打印：打印时 OrdersPage 只渲染送货单本身（printing 态），此处只做分页与页边距 ---- */
 @media print {
-  body * {
-    visibility: hidden;
-  }
-  .delivery-note,
-  .delivery-note * {
-    visibility: visible;
+  body {
+    background: #fff;
   }
   .delivery-note {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
     max-width: none;
     padding: 0;
+  }
+  .dn-table thead {
+    display: table-header-group; /* 表头跨页重复 */
+  }
+  .dn-table tr {
+    break-inside: avoid; /* 行不被页边界拦腰截断 */
+  }
+  @page {
+    margin: 14mm;
   }
 }

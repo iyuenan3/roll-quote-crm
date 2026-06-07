@@ -76,4 +76,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   remark          TEXT    NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items (order_id);
+-- 统计聚合用（CREATE INDEX IF NOT EXISTS 幂等，每次 openDb 安全，旧库自动补）
+CREATE INDEX IF NOT EXISTS idx_orders_customer_date ON orders (customer_id, order_date);
+CREATE INDEX IF NOT EXISTS idx_order_items_product ON order_items (product_id);
 `;

@@ -4,9 +4,10 @@ import { CustomersPage } from './pages/CustomersPage';
 import { QuotesPage } from './pages/QuotesPage';
 import { NewOrderPage } from './pages/NewOrderPage';
 import { OrdersPage } from './pages/OrdersPage';
+import { StatsPage } from './pages/StatsPage';
 import { SettingsPage } from './pages/SettingsPage';
 
-type View = 'neworder' | 'orders' | 'products' | 'customers' | 'quotes' | 'settings';
+type View = 'neworder' | 'orders' | 'products' | 'customers' | 'quotes' | 'stats' | 'settings';
 
 const NAV: { key: View; label: string }[] = [
   { key: 'neworder', label: '新建订单' },
@@ -14,6 +15,7 @@ const NAV: { key: View; label: string }[] = [
   { key: 'products', label: '产品' },
   { key: 'customers', label: '客户' },
   { key: 'quotes', label: '报价' },
+  { key: 'stats', label: '月度统计' },
   { key: 'settings', label: '公司信息' },
 ];
 
@@ -42,6 +44,7 @@ export function App() {
         {view === 'products' && <ProductsPage />}
         {view === 'customers' && <CustomersPage />}
         {view === 'quotes' && <QuotesPage />}
+        {view === 'stats' && <StatsPage />}
         {view === 'settings' && <SettingsPage />}
       </main>
     </div>

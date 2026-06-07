@@ -21,9 +21,10 @@
 - 现象：`UNIQUE INDEX ... WHERE is_current = 1` 只拦 is_current=1 的重复，raw 插 is_current=2 能绕过「至多一条 current」红线，成孤儿数据。
 - 结论：布尔列必须配 `CHECK (col IN (0,1))`，索引语义才与红线严格等价。is_manual、status 同理加值域 CHECK。
 
-## TODO（接入用户前必做）· schema 迁移机制
-- 现状：建表用 `CREATE TABLE IF NOT EXISTS`，已有库改结构不会升级。pre-release 还没有真实订单库，是引入成本最低的窗口。
-- 计划：用 `PRAGMA user_version` 记版本，openDb 按版本顺序跑 ALTER + 回填。一旦有真实数据在外，再补会很贵。
+## 2026-06-07 · schema 迁移机制已落地（PRAGMA user_version）
+- 现状：`openDb` 里 `migrate()` 用 `PRAGMA user_version` 记版本，按版本补差异；v1 给旧库补 `order_items.product_name`。新库由 SCHEMA_SQL 建全、迁移幂等跳过。已在真实旧 dev 库验证（0→1，补列不丢数据）。
+- 加列走 migrate（CREATE TABLE IF NOT EXISTS 不会改已有表）；加索引可直接进 SCHEMA_SQL（CREATE INDEX IF NOT EXISTS 每次 openDb 幂等执行，旧库自动补）。
+- 后续加 v2 迁移：在 migrate 里加 `if (v < 2) { ...; db.pragma('user_version = 2') }`。
 
 ## 2026-06-07 · electron-rebuild 必须带 -f，否则 node↔electron 切换会留旧 ABI
 - 现象:跑过 `npm run rebuild:node`(better-sqlite3 切 Node ABI 127)后,再 `electron-rebuild -w better-sqlite3`(无 -f)虽打印「Rebuild Complete」却跳过实际重编,留下 127;Electron 33(ABI 130)加载报 `NODE_MODULE_VERSION 127 vs 130 / ERR_DLOPEN_FAILED`。

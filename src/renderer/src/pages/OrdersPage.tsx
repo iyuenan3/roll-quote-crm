@@ -9,6 +9,15 @@ export function OrdersPage() {
   const [company, setCompany] = useState<Company>({ name: '', address: '', phone: '', terms: '' });
   const [detail, setDetail] = useState<{ order: Order; items: OrderItem[] } | null>(null);
   const [msg, setMsg] = useState('');
+  const [printing, setPrinting] = useState(false);
+
+  // 打印时只把送货单渲进 DOM（见下方 early return），再 window.print，多页表格自然分页、不出列表/按钮
+  useEffect(() => {
+    if (printing) {
+      window.print();
+      setPrinting(false);
+    }
+  }, [printing]);
 
   const loadList = async () => {
     try {
@@ -32,6 +41,7 @@ export function OrdersPage() {
     setMsg('');
     try {
       const d = await getDb().getOrder({ id });
+      if (!d) setMsg('订单不存在或已被删除');
       setDetail(d ?? null);
     } catch (e) {
       setMsg(errMsg(e));
@@ -41,13 +51,26 @@ export function OrdersPage() {
   const doVoid = async (id: number) => {
     if (!window.confirm('确认作废该订单？作废后不计入统计，但保留记录。')) return;
     try {
-      await getDb().voidOrder({ id });
+      const changed = await getDb().voidOrder({ id });
+      if (!changed) setMsg('该订单不存在或已变动，列表已刷新');
       if (detail?.order.id === id) setDetail(null);
       await loadList();
     } catch (e) {
       setMsg(errMsg(e));
     }
   };
+
+  // 打印态：只渲染送货单，window.print 后自动恢复
+  if (printing && detail) {
+    return (
+      <DeliveryNote
+        order={detail.order}
+        items={detail.items}
+        customer={customers.find((c) => c.id === detail.order.customerId)}
+        company={company}
+      />
+    );
+  }
 
   return (
     <div>
@@ -111,7 +134,7 @@ export function OrdersPage() {
       {detail && (
         <div className="card">
           <div className="no-print" style={{ marginBottom: 12 }}>
-            <button className="btn" onClick={() => window.print()}>
+            <button className="btn" onClick={() => setPrinting(true)}>
               打印 / 存 PDF
             </button>{' '}
             <button className="btn" style={{ background: 'var(--bg)', color: 'var(--text)' }} onClick={() => setDetail(null)}>

@@ -8,6 +8,9 @@ import {
   getCurrentQuote,
   createOrder,
   getOrder,
+  voidOrder,
+  statsByCustomerMonth,
+  statsByProductMonth,
 } from './index';
 import { parseOrder } from '../core/parse-order';
 import { computeRow, areaSqm, amountToChinese } from '../core/pricing';
@@ -98,5 +101,23 @@ describe('order flow 端到端（parse → quote → price → persist → read�
     expect(after.items[0].amount).toBe(before); // 历史订单金额纹丝不动
     expect(after.items[0].rollPriceUsed).toBe(100);
     expect(getCurrentQuote(db, cid, p05)!.rollPrice).toBe(200); // 当前报价已更新
+  });
+
+  it('月度统计：作废订单不计入', () => {
+    const items = buildItems('05纯低温胶 2500*893 21张'); // amount 223
+    const keep = createOrder(db, { orderNo: 'S-1', customerId: cid, items });
+    const drop = createOrder(db, { orderNo: 'S-2', customerId: cid, items });
+
+    const before = statsByCustomerMonth(db).find((r) => r.customerId === cid)!;
+    expect(before.orderCount).toBe(2);
+
+    voidOrder(db, drop);
+
+    const after = statsByCustomerMonth(db).find((r) => r.customerId === cid)!;
+    expect(after.orderCount).toBe(1); // 作废单不计
+    expect(after.total).toBe(getOrder(db, keep)!.order.totalAmount); // 只剩有效单金额
+
+    const prod = statsByProductMonth(db).find((r) => r.productId === p05)!;
+    expect(prod.qty).toBe(21); // 仅有效单的数量
   });
 });

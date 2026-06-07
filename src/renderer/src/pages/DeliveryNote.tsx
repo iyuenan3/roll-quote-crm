@@ -62,8 +62,8 @@ export function DeliveryNote({ order, items, customer, company }: Props) {
                 {it.qty}
                 {it.unit}
               </td>
-              <td className="price">{it.unitPrice}</td>
-              <td className="price">{it.amount}</td>
+              <td className="price">{it.unitPrice.toFixed(3)}</td>
+              <td className="price">{it.amount.toLocaleString('zh-CN')}</td>
             </tr>
           ))}
         </tbody>
@@ -72,7 +72,7 @@ export function DeliveryNote({ order, items, customer, company }: Props) {
             <td colSpan={5} style={{ textAlign: 'right' }}>
               合计金额
             </td>
-            <td className="price">{order.totalAmount}</td>
+            <td className="price">{order.totalAmount.toLocaleString('zh-CN')}</td>
           </tr>
           <tr>
             <td colSpan={2}>合计（大写）</td>

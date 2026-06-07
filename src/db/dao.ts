@@ -342,8 +342,8 @@ export function listOrders(db: DB): ListedOrder[] {
   return (
     db
       .prepare(
-        `SELECT o.*, c.name AS customer_name
-         FROM orders o JOIN customers c ON c.id = o.customer_id
+        `SELECT o.*, COALESCE(c.name, '(客户已删除)') AS customer_name
+         FROM orders o LEFT JOIN customers c ON c.id = o.customer_id
          ORDER BY o.id DESC`,
       )
       .all() as any[]
@@ -359,7 +359,74 @@ export function listOrders(db: DB): ListedOrder[] {
   }));
 }
 
-/** 作废订单：改 status 而非物理删，已计入历史的订单只可作废（保留快照）。 */
-export function voidOrder(db: DB, id: number): void {
-  db.prepare("UPDATE orders SET status = 'void' WHERE id = ?").run(id);
+/** 作废订单：改 status 而非物理删，保留快照。返回受影响行数（0 = 该 id 不存在）。 */
+export function voidOrder(db: DB, id: number): number {
+  return db.prepare("UPDATE orders SET status = 'void' WHERE id = ?").run(id).changes;
+}
+
+// ---------- 统计（仅统计 active 订单；按本地日期分月）----------
+export interface CustomerMonthStat {
+  ym: string;
+  customerId: number;
+  customerName: string;
+  orderCount: number;
+  total: number;
+}
+export interface ProductMonthStat {
+  ym: string;
+  productId: number | null;
+  productName: string;
+  qty: number;
+  total: number;
+}
+
+/** 有订单的月份列表（倒序），供统计页筛选。 */
+export function listOrderMonths(db: DB): string[] {
+  return (
+    db
+      .prepare(
+        `SELECT DISTINCT strftime('%Y-%m', order_date) AS ym FROM orders WHERE status = 'active' ORDER BY ym DESC`,
+      )
+      .all() as { ym: string }[]
+  )
+    .map((r) => r.ym)
+    .filter(Boolean);
+}
+
+/** 客户 × 月 消费。ym 省略则跨全部月份。作废单不计。 */
+export function statsByCustomerMonth(db: DB, ym?: string): CustomerMonthStat[] {
+  const sql = `
+    SELECT strftime('%Y-%m', o.order_date) AS ym, o.customer_id, c.name AS customer_name,
+           COUNT(*) AS order_count, SUM(o.total_amount) AS total
+    FROM orders o JOIN customers c ON c.id = o.customer_id
+    WHERE o.status = 'active' ${ym ? "AND strftime('%Y-%m', o.order_date) = ?" : ''}
+    GROUP BY ym, o.customer_id
+    ORDER BY ym DESC, total DESC`;
+  const rows = (ym ? db.prepare(sql).all(ym) : db.prepare(sql).all()) as any[];
+  return rows.map((r) => ({
+    ym: r.ym,
+    customerId: r.customer_id,
+    customerName: r.customer_name,
+    orderCount: r.order_count,
+    total: r.total,
+  }));
+}
+
+/** 产品 × 月 销量（按快照品名）。ym 省略则跨全部月份。作废单不计。 */
+export function statsByProductMonth(db: DB, ym?: string): ProductMonthStat[] {
+  const sql = `
+    SELECT strftime('%Y-%m', o.order_date) AS ym, oi.product_id, oi.product_name,
+           SUM(oi.qty) AS qty, SUM(oi.amount) AS total
+    FROM order_items oi JOIN orders o ON o.id = oi.order_id
+    WHERE o.status = 'active' ${ym ? "AND strftime('%Y-%m', o.order_date) = ?" : ''}
+    GROUP BY ym, oi.product_id, oi.product_name
+    ORDER BY ym DESC, total DESC`;
+  const rows = (ym ? db.prepare(sql).all(ym) : db.prepare(sql).all()) as any[];
+  return rows.map((r) => ({
+    ym: r.ym,
+    productId: r.product_id,
+    productName: r.product_name,
+    qty: r.qty,
+    total: r.total,
+  }));
 }
