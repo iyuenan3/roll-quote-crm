@@ -3,6 +3,7 @@ import Database from 'better-sqlite3';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { existsSync, rmSync } from 'fs';
+import { adjustRollPrice } from '../core/pricing';
 import {
   openDb,
   migrate,
@@ -195,6 +196,40 @@ describe('批量调价 applyBatchRepricing（红线：仍只追加 + 原子）',
     const n = applyBatchRepricing(db, { quotes: [], base: { productId: pid, rollPrice: 77 } });
     expect(n).toBe(1);
     expect(getCurrentBasePrice(db, pid)?.rollPrice).toBe(77);
+  });
+
+  it('下调价（负幅度 / 带小数）端到端落库、旧高价留痕、REAL 精度往返', () => {
+    const cid2 = createCustomer(db, { name: '王五' });
+    setQuote(db, { customerId: cid, productId: pid, rollPrice: 100 });
+    setQuote(db, { customerId: cid2, productId: pid, rollPrice: 99.99 });
+
+    applyBatchRepricing(db, {
+      quotes: [
+        { customerId: cid, productId: pid, rollPrice: adjustRollPrice(100, 'percent', -10) }, // 90
+        { customerId: cid2, productId: pid, rollPrice: adjustRollPrice(99.99, 'percent', -10) }, // 89.99
+      ],
+    });
+
+    expect(getCurrentQuote(db, cid, pid)?.rollPrice).toBe(90); // 下调价落库
+    expect(getCurrentQuote(db, cid2, pid)?.rollPrice).toBe(89.99); // 小数 REAL 存取往返不丢
+    expect(listQuoteHistory(db, cid, pid).map((q) => q.rollPrice)).toEqual([90, 100]); // 旧高价留痕
+    expect(listQuoteHistory(db, cid2, pid).map((q) => q.rollPrice)).toEqual([89.99, 99.99]);
+  });
+
+  it('原子：客户报价全成功但最后 base 写入 FK 失败 → 整批回滚（含已写客户行）', () => {
+    setQuote(db, { customerId: cid, productId: pid, rollPrice: 100 });
+    expect(() =>
+      applyBatchRepricing(db, {
+        quotes: [{ customerId: cid, productId: pid, rollPrice: 110 }],
+        base: { productId: 99999, rollPrice: 90 }, // base FK 在事务最后一步抛错
+      }),
+    ).toThrow();
+    expect(getCurrentQuote(db, cid, pid)?.rollPrice).toBe(100); // 已写的客户新价随 base 失败一并回滚
+    expect(listQuoteHistory(db, cid, pid)).toHaveLength(1); // 无残留新行
+  });
+
+  it('空 quotes 且无 base：no-op，返回 0、不抛错', () => {
+    expect(applyBatchRepricing(db, { quotes: [] })).toBe(0);
   });
 });
 

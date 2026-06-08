@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Product, BasePrice, ProductQuoteRow } from '../../../shared/api';
 import { adjustRollPrice, type PriceAdjustMode } from '../../../core/pricing';
 import { getDb, errMsg } from '../lib/db';
@@ -17,6 +17,7 @@ export function BatchRepricePage() {
   const [note, setNote] = useState('原料调价');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const reqSeq = useRef(0); // 加载请求序号：快速切产品时丢弃过期响应，避免旧产品客户行落到新产品
 
   useEffect(() => {
     void (async () => {
@@ -30,16 +31,18 @@ export function BatchRepricePage() {
 
   const loadForProduct = async (pid: number) => {
     setMsg('');
+    const seq = ++reqSeq.current;
     try {
       const [qs, b] = await Promise.all([
         getDb().listCurrentQuotesByProduct({ productId: pid }),
         getDb().getCurrentBasePrice({ productId: pid }),
       ]);
+      if (seq !== reqSeq.current) return; // 已切到别的产品，丢弃过期响应（防客户行错配到新产品）
       setRows(qs);
       setBase(b);
       setExcluded(new Set());
     } catch (e) {
-      setMsg(errMsg(e));
+      if (seq === reqSeq.current) setMsg(errMsg(e));
     }
   };
 
