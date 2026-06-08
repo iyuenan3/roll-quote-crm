@@ -7,6 +7,7 @@ import type {
   Quote,
   BasePrice,
   EffectiveQuote,
+  ProductQuoteRow,
   Order,
   OrderItem,
   NewOrderItem,
@@ -23,6 +24,7 @@ export type {
   Quote,
   BasePrice,
   EffectiveQuote,
+  ProductQuoteRow,
   Order,
   OrderItem,
   NewOrderItem,
@@ -63,6 +65,11 @@ export interface DbApi {
   listBasePriceHistory(a: { productId: number }): Promise<BasePrice[]>;
   listCurrentBasePrices(): Promise<BasePrice[]>;
   getEffectiveQuote(a: { customerId: number; productId: number }): Promise<EffectiveQuote | undefined>;
+  listCurrentQuotesByProduct(a: { productId: number }): Promise<ProductQuoteRow[]>;
+  applyBatchRepricing(i: {
+    quotes: { customerId: number; productId: number; rollPrice: number; note?: string }[];
+    base?: { productId: number; rollPrice: number; note?: string };
+  }): Promise<number>;
   createOrder(i: {
     orderNo: string;
     customerId: number;

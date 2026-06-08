@@ -47,6 +47,13 @@ export interface EffectiveQuote {
   rollPrice: number;
   source: 'customer' | 'base';
 }
+/** 某产品下、各客户当前专属价一行（批量调价页用，带客户名）。 */
+export interface ProductQuoteRow {
+  customerId: number;
+  customerName: string;
+  rollPrice: number;
+  effectiveDate: string;
+}
 export interface Company {
   name: string;
   address: string;
@@ -260,6 +267,25 @@ export function listQuoteHistory(db: DB, customerId: number, productId: number):
   ).map(toQuote);
 }
 
+/** 某产品下所有客户的当前专属价（带客户名，按客户名排序）。批量调价页一览用。 */
+export function listCurrentQuotesByProduct(db: DB, productId: number): ProductQuoteRow[] {
+  return (
+    db
+      .prepare(
+        `SELECT q.customer_id, c.name AS customer_name, q.roll_price, q.effective_date
+         FROM quotes q JOIN customers c ON c.id = q.customer_id
+         WHERE q.product_id = ? AND q.is_current = 1
+         ORDER BY c.name`,
+      )
+      .all(productId) as any[]
+  ).map((r) => ({
+    customerId: r.customer_id,
+    customerName: r.customer_name,
+    rollPrice: r.roll_price,
+    effectiveDate: r.effective_date,
+  }));
+}
+
 // ---------- product_prices（产品基础价；改价追加 + 翻 is_current，同 quotes）----------
 export function setBasePrice(
   db: DB,
@@ -319,6 +345,43 @@ export function getEffectiveQuote(
   const b = getCurrentBasePrice(db, productId);
   if (b) return { rollPrice: b.rollPrice, source: 'base' };
   return undefined;
+}
+
+/**
+ * 批量调价（原料浮动场景）：一笔事务里给每个客户追加新报价、可选同时追加产品基础价。
+ * 复用 setQuote / setBasePrice（各自的事务在外层事务内退化为 savepoint，保持原子）：
+ * 全部走「追加新行 + 翻旧 is_current」，绝不原地改价（红线：报价历史只追加）。
+ * 任一价 ≤0 或非有限数先整体拒绝（与单条 setQuote / setBasePrice 一致），不留半套。
+ * 返回追加的行数（客户报价数 + 基础价 0/1）。
+ */
+export function applyBatchRepricing(
+  db: DB,
+  input: {
+    quotes: { customerId: number; productId: number; rollPrice: number; note?: string }[];
+    base?: { productId: number; rollPrice: number; note?: string };
+  },
+): number {
+  for (const q of input.quotes) {
+    if (!Number.isFinite(q.rollPrice) || q.rollPrice <= 0) {
+      throw new Error('批量调价：存在非正报价，已全部取消');
+    }
+  }
+  if (input.base && (!Number.isFinite(input.base.rollPrice) || input.base.rollPrice <= 0)) {
+    throw new Error('批量调价：基础价非正，已全部取消');
+  }
+  const tx = db.transaction(() => {
+    let n = 0;
+    for (const q of input.quotes) {
+      setQuote(db, q);
+      n++;
+    }
+    if (input.base) {
+      setBasePrice(db, input.base);
+      n++;
+    }
+    return n;
+  });
+  return tx();
 }
 
 // ---------- orders（红线：快照 roll_price_used，历史不回改）----------

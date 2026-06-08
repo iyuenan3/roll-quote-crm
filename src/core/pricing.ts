@@ -72,6 +72,28 @@ export function computeRow(input: PriceInput): PriceResult {
   return { areaSqm: area, unitPrice, amount };
 }
 
+// ---- 批量调价（原料浮动时按模式调整每卷报价）----
+
+export type PriceAdjustMode = 'percent' | 'delta' | 'set';
+
+/**
+ * 把一个每卷报价按指定模式调整，结果四舍五入到 2 位小数（元/卷，到分）。纯函数。
+ *   percent：current × (1 + value/100)    如 value=5 → 上浮 5%
+ *   delta  ：current + value               如 value=-3 → 每卷降 3 元
+ *   set    ：value                         直接设为该值（忽略 current）
+ * 不在此处校验正负（调用方按业务拦 ≤0，因 setQuote / setBasePrice 要求正数）。
+ */
+export function adjustRollPrice(current: number, mode: PriceAdjustMode, value: number): number {
+  if (!Number.isFinite(current) || !Number.isFinite(value)) {
+    throw new Error('adjustRollPrice: current / value 必须是有限数');
+  }
+  let next: number;
+  if (mode === 'percent') next = current * (1 + value / 100);
+  else if (mode === 'delta') next = current + value;
+  else next = value;
+  return round(next, 2);
+}
+
 // ---- 中文大写金额（元角分整）----
 
 const DIGITS = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];

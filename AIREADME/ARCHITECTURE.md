@@ -39,10 +39,10 @@ SQLite（orders + order_items，快照 roll_price_used）
 ## 关键模块
 - ✅ `src/core/pricing.ts`：计价 + 中文大写金额。纯函数 + 单测。
 - ✅ `src/core/parse-order.ts`：模板解析 + 品名匹配。纯函数 + 单测。
-- ✅ `src/db/`：schema + 迁移 + DAO（catalog / quotes / 基础价 product_prices / 取价回落 getEffectiveQuote / orders / 统计聚合）+ 红线单测。
+- ✅ `src/db/`：schema + 迁移 + DAO（catalog / quotes / 基础价 product_prices / 取价回落 getEffectiveQuote / 批量调价 applyBatchRepricing / orders / 统计聚合）+ 红线单测。
 - ✅ DB IPC 桥：`src/main/db-service.ts`（主进程持库 + ipcMain.handle + 错误脱敏）、`src/preload/index.ts`（contextBridge 暴露 window.api）、`src/shared/api.ts`（IPC 类型契约）。渲染进程经 window.api 调用，不直接碰 Node / DB。
 - ✅ `src/renderer/src/pages/DeliveryNote.tsx` + `styles.css @media print`：送货单视图 + 打印（window.print，只出送货单）。
-- ✅ `src/renderer/src/pages/{NewOrder,Orders,Products,Customers,Quotes,Stats,Settings}Page.tsx`：业务页全部落地。
+- ✅ `src/renderer/src/pages/{NewOrder,Orders,Products,Customers,Quotes,BatchReprice,Stats,Settings}Page.tsx`：业务页全部落地。
 
 ## 禁改项
 - 计价 / 解析必须留在 `src/core` 纯函数，UI 只调用、不内联算法。

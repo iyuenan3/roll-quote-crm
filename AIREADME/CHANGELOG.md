@@ -3,6 +3,8 @@
 ⚑ 未 release。首个里程碑后倒序记版本块（Added / Changed / Fixed / Removed / Deprecated），理由链 DECISIONS。
 
 ## Unreleased
+- 批量调价（2026-06-08）：新增「批量调价」页 + DAO（listCurrentQuotesByProduct / applyBatchRepricing：一笔事务逐客户追加新报价、可同时追加基础价，复用 setQuote/setBasePrice 的 savepoint 原子）+ core `adjustRollPrice`（percent/delta/set，round 2 位）。原料浮动时按统一方式给选中客户（可逐个排除）调价，仍只追加、旧价留痕。测试 81 → 89。
+
 - 产品基础价层（2026-06-08，DECISIONS D7）：新增 `product_prices` 表（append-only，镜像 quotes 去 customer 维）+ DAO（setBasePrice / getCurrentBasePrice / listBasePriceHistory / listCurrentBasePrices / getEffectiveQuote）+ 5 个 IPC。下单取价回落「客户专属价 → 产品基础价 → 无价拦单」；产品页设/改/看基础价历史，报价页预填基础价并显示，下单行标价来源（客户价 / 基础价）。测试 → 80。
 
 - 下单加手动行 + 行级备注（2026-06-08）：NewOrderPage 支持从零加手动行（目录外品名 / 自填规格单价 / 单位）+ 每行删除 + 每行备注；送货单按行显示备注。纯前端，数据层早已预留 is_manual / remark 列。

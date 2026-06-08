@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { round, areaSqm, computeRow, amountToChinese, SQM_PER_ROLL } from './pricing';
+import { round, areaSqm, computeRow, amountToChinese, SQM_PER_ROLL, adjustRollPrice } from './pricing';
 
 describe('round 取整', () => {
   it('0 与整数', () => {
@@ -128,5 +128,26 @@ describe('amountToChinese 中文大写', () => {
   });
   it('超出兆级（>=10^16）抛错，不产出 undefined', () => {
     expect(() => amountToChinese(1e16)).toThrow();
+  });
+});
+
+describe('adjustRollPrice 批量调价', () => {
+  it('percent：按百分比上浮 / 下调，round 到 2 位', () => {
+    expect(adjustRollPrice(100, 'percent', 5)).toBe(105);
+    expect(adjustRollPrice(120, 'percent', 3)).toBe(123.6);
+    expect(adjustRollPrice(100, 'percent', -10)).toBe(90);
+    expect(adjustRollPrice(99.99, 'percent', 5)).toBe(104.99); // 99.99×1.05=104.9895 → 104.99
+  });
+  it('delta：按固定额增减', () => {
+    expect(adjustRollPrice(100, 'delta', 8)).toBe(108);
+    expect(adjustRollPrice(100, 'delta', -3.5)).toBe(96.5);
+  });
+  it('set：直接设为指定值，忽略当前价', () => {
+    expect(adjustRollPrice(100, 'set', 88)).toBe(88);
+    expect(adjustRollPrice(999, 'set', 0.5)).toBe(0.5);
+  });
+  it('非有限入参抛错', () => {
+    expect(() => adjustRollPrice(NaN, 'percent', 5)).toThrow();
+    expect(() => adjustRollPrice(100, 'delta', Infinity)).toThrow();
   });
 });

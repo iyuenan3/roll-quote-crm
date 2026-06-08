@@ -19,6 +19,8 @@ import {
   listBasePriceHistory,
   listCurrentBasePrices,
   getEffectiveQuote,
+  listCurrentQuotesByProduct,
+  applyBatchRepricing,
   createOrder,
   getOrder,
   listOrders,
@@ -130,6 +132,69 @@ describe('product_prices 基础价（红线 D7：改价追加 + 客户价优先�
     expect(getEffectiveQuote(db, cid, pid)).toEqual({ rollPrice: 80, source: 'base' }); // 回落基础价
     setQuote(db, { customerId: cid, productId: pid, rollPrice: 120 });
     expect(getEffectiveQuote(db, cid, pid)).toEqual({ rollPrice: 120, source: 'customer' }); // 客户价优先（二维不退化）
+  });
+});
+
+describe('批量调价 applyBatchRepricing（红线：仍只追加 + 原子）', () => {
+  it('逐客户追加新报价、旧价留痕、当前价更新；listCurrentQuotesByProduct 带客户名', () => {
+    const cid2 = createCustomer(db, { name: '李四' });
+    setQuote(db, { customerId: cid, productId: pid, rollPrice: 100 });
+    setQuote(db, { customerId: cid2, productId: pid, rollPrice: 80 });
+
+    const rows = listCurrentQuotesByProduct(db, pid);
+    expect(rows.map((r) => r.customerName)).toEqual(['张三', '李四']); // 按客户名排序
+    expect(rows.find((r) => r.customerId === cid)?.rollPrice).toBe(100);
+
+    // 两个客户各上浮（已在 UI 算好新价），同时调基础价
+    const n = applyBatchRepricing(db, {
+      quotes: [
+        { customerId: cid, productId: pid, rollPrice: 105, note: '原料涨价' },
+        { customerId: cid2, productId: pid, rollPrice: 84, note: '原料涨价' },
+      ],
+      base: { productId: pid, rollPrice: 90, note: '原料涨价' },
+    });
+    expect(n).toBe(3); // 2 客户 + 1 基础价
+
+    expect(getCurrentQuote(db, cid, pid)?.rollPrice).toBe(105);
+    expect(getCurrentQuote(db, cid2, pid)?.rollPrice).toBe(84);
+    expect(getCurrentBasePrice(db, pid)?.rollPrice).toBe(90);
+    // 红线：旧价仍在历史里
+    expect(listQuoteHistory(db, cid, pid).map((q) => q.rollPrice)).toEqual([105, 100]);
+    expect(listQuoteHistory(db, cid, pid).filter((q) => q.isCurrent)).toHaveLength(1);
+  });
+
+  it('原子：某行非正价整体取消，已有当前价不受影响、无新行残留', () => {
+    setQuote(db, { customerId: cid, productId: pid, rollPrice: 100 });
+    expect(() =>
+      applyBatchRepricing(db, {
+        quotes: [
+          { customerId: cid, productId: pid, rollPrice: 110 },
+          { customerId: cid, productId: pid, rollPrice: 0 }, // 非正 → 整批拒绝
+        ],
+      }),
+    ).toThrow();
+    expect(getCurrentQuote(db, cid, pid)?.rollPrice).toBe(100); // 不受影响
+    expect(listQuoteHistory(db, cid, pid)).toHaveLength(1); // 无残留
+  });
+
+  it('原子：事务中途 FK 失败（不存在客户）整批回滚', () => {
+    setQuote(db, { customerId: cid, productId: pid, rollPrice: 100 });
+    expect(() =>
+      applyBatchRepricing(db, {
+        quotes: [
+          { customerId: cid, productId: pid, rollPrice: 110 },
+          { customerId: 99999, productId: pid, rollPrice: 120 }, // FK 失败
+        ],
+      }),
+    ).toThrow();
+    expect(getCurrentQuote(db, cid, pid)?.rollPrice).toBe(100); // 第一条也回滚
+    expect(listQuoteHistory(db, cid, pid)).toHaveLength(1);
+  });
+
+  it('只调基础价（无客户报价行）也可用', () => {
+    const n = applyBatchRepricing(db, { quotes: [], base: { productId: pid, rollPrice: 77 } });
+    expect(n).toBe(1);
+    expect(getCurrentBasePrice(db, pid)?.rollPrice).toBe(77);
   });
 });
 
