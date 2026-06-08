@@ -5,6 +5,7 @@ import { computeRow, areaSqm, amountToChinese, round, AMOUNT_DECIMALS } from '..
 import { getDb, errMsg } from '../lib/db';
 
 interface Row {
+  uid: string; // 稳定行标识，作 React key + 行匹配；避免删中间行后下标错位、输入焦点乱跳
   productName: string;
   productId: number | null;
   rawSpec: string;
@@ -13,11 +14,17 @@ interface Row {
   qty: number;
   unit: string;
   rollPrice?: number; // 当前报价（快照来源）
+  priceSource?: 'customer' | 'base'; // 自动行取价来源：客户专属价 / 产品基础价回落
   unitPrice: number;
   amount: number;
   isManual: boolean;
+  scratch: boolean; // 从零手动添加的行（品名 / 规格也可编辑）；解析出来的行为 false
+  remark: string;
   warning: string;
 }
+
+let rowSeq = 0;
+const nextRowUid = (): string => `row-${rowSeq++}`;
 
 function genOrderNo(): string {
   const d = new Date();
@@ -89,16 +96,23 @@ export function NewOrderPage() {
       for (const it of result.items) {
         const pid = it.matchedProduct?.id ?? null;
         let rollPrice: number | undefined;
+        let priceSource: 'customer' | 'base' | undefined;
         let warning = '';
         if (it.matchType === 'none') warning = '品名未匹配，请改手动价或先建产品';
         else if (it.matchType === 'ambiguous') warning = '品名匹配到多个产品，请改手动价或规范品名';
         else if (pid != null) {
-          const q = await getDb().getCurrentQuote({ customerId: cid, productId: pid });
-          if (q) rollPrice = q.rollPrice;
-          else warning = '该客户该产品无报价，请先设报价或改手动价';
+          // 取价回落：客户专属价 → 产品基础价 → 都无则提示（红线 D7：客户价优先，基础价只回落）
+          const eq = await getDb().getEffectiveQuote({ customerId: cid, productId: pid });
+          if (eq) {
+            rollPrice = eq.rollPrice;
+            priceSource = eq.source;
+          } else {
+            warning = '该客户与该产品均无报价（客户价 / 基础价都没设），请先设价或改手动价';
+          }
         }
         built.push(
           price({
+            uid: nextRowUid(),
             productName: it.productName,
             productId: pid,
             rawSpec: it.rawSpec,
@@ -107,9 +121,12 @@ export function NewOrderPage() {
             qty: it.qty,
             unit: it.unit,
             rollPrice,
+            priceSource,
             unitPrice: 0,
             amount: 0,
             isManual: false,
+            scratch: false,
+            remark: '',
             warning,
           }),
         );
@@ -127,26 +144,73 @@ export function NewOrderPage() {
     setRows((rs) => rs.map((r, idx) => (idx === i ? price({ ...r, ...patch }) : r)));
   };
 
+  const removeRow = (i: number) => {
+    setRows((rs) => rs.filter((_, idx) => idx !== i));
+  };
+
+  // 从零加一行：手动行，品名 / 规格 / 数量 / 单价全手填，不走解析与自动报价
+  const addManualRow = () => {
+    setMsg('');
+    setRows((rs) => [
+      ...rs,
+      {
+        uid: nextRowUid(),
+        productName: '',
+        productId: null,
+        rawSpec: '',
+        widthMm: 0,
+        heightMm: 0,
+        qty: 1,
+        unit: '张',
+        unitPrice: 0,
+        amount: 0,
+        isManual: true,
+        scratch: true,
+        remark: '',
+        warning: '',
+      },
+    ]);
+  };
+
   const total = round(
     rows.reduce((s, r) => s + r.amount, 0),
     AMOUNT_DECIMALS,
   );
 
+  // 自动行未匹配 / 无报价：阻止保存
   const unresolved = rows.filter((r) => !r.isManual && (r.warning !== '' || r.rollPrice == null));
-  const canSave = customerId !== '' && rows.length > 0 && orderNo.trim() !== '' && unresolved.length === 0;
+  // 手动行未填全（品名 / 正的宽长 / 正的数量）：阻止保存，避免触发 DB 的 CHECK 抛错
+  const incompleteManual = rows.filter(
+    (r) => r.isManual && (!r.productName.trim() || !(r.widthMm > 0) || !(r.heightMm > 0) || !(r.qty > 0)),
+  );
+  // 任何行数量被清空 / 改成非正数：前置拦，别推到 DB 的 CHECK(qty>0)（自动行不在上面两道闸内）
+  const invalidQty = rows.filter((r) => !(r.qty > 0));
+  const canSave =
+    customerId !== '' &&
+    rows.length > 0 &&
+    orderNo.trim() !== '' &&
+    unresolved.length === 0 &&
+    incompleteManual.length === 0 &&
+    invalidQty.length === 0;
 
   const doSave = async () => {
     setMsg('');
     if (!canSave) {
-      setMsg('有未匹配 / 无报价的行，请改手动价或先补产品/报价');
+      setMsg(
+        invalidQty.length > 0
+          ? '有行数量为 0 或空，请填正确数量后再保存'
+          : incompleteManual.length > 0
+            ? '有手动行未填全（品名 / 规格宽长 / 数量需大于 0），请补全后再保存'
+            : '有未匹配 / 无报价的行，请改手动价或先补产品/报价',
+      );
       return;
     }
     setBusy(true);
     try {
       const items: NewOrderItem[] = rows.map((r) => ({
         productId: r.productId,
-        productName: r.productName,
-        rawSpec: r.rawSpec,
+        productName: r.productName.trim(),
+        rawSpec: r.scratch ? `${r.widthMm}*${r.heightMm}` : r.rawSpec,
         widthMm: r.widthMm,
         heightMm: r.heightMm,
         qty: r.qty,
@@ -156,6 +220,7 @@ export function NewOrderPage() {
         unitPrice: r.unitPrice,
         amount: r.amount,
         isManual: r.isManual,
+        remark: r.remark.trim(),
       }));
       const id = await getDb().createOrder({
         orderNo: orderNo.trim(),
@@ -176,7 +241,7 @@ export function NewOrderPage() {
   return (
     <div>
       <h2 className="page-title">新建订单</h2>
-      <p className="page-sub">粘贴客户下单文本，自动解析并按该客户该产品最新报价算价。可改量、改价（改价即转手动行）。</p>
+      <p className="page-sub">粘贴客户下单文本，自动按该客户该产品报价算价（无客户专属价时回落产品基础价）。可改量、改价（改价即转手动行），也可从零加手动行；每行可填备注。</p>
 
       <div className="card">
         <h3>下单信息</h3>
@@ -207,9 +272,16 @@ export function NewOrderPage() {
             placeholder={'客户：张三\n05纯低温胶 2500*893 21张\n06纯低温胶 420*50000 22卷'}
           />
         </div>
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
           <button className="btn" onClick={doParse}>
             解析
+          </button>
+          <button
+            className="btn"
+            style={{ background: 'var(--bg)', color: 'var(--text)' }}
+            onClick={addManualRow}
+          >
+            + 手动加行
           </button>
         </div>
         {msg && <p className="error" style={{ color: msg.startsWith('✅') ? 'var(--ok)' : undefined }}>{msg}</p>}
@@ -226,28 +298,75 @@ export function NewOrderPage() {
                 <th>数量</th>
                 <th>单价（元）</th>
                 <th>金额（元）</th>
+                <th>备注</th>
                 <th>状态</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={i}>
-                  <td>{r.productName || '（空）'}</td>
+                <tr key={r.uid}>
                   <td>
-                    {r.rawSpec}
-                    <span style={{ color: 'var(--muted)' }}>
-                      {' '}
-                      {r.widthMm}×{r.heightMm}mm
-                    </span>
+                    {r.scratch ? (
+                      <input
+                        value={r.productName}
+                        onChange={(e) => updateRow(i, { productName: e.target.value })}
+                        placeholder="品名"
+                        style={{ width: 130 }}
+                      />
+                    ) : (
+                      r.productName || '（空）'
+                    )}
+                  </td>
+                  <td>
+                    {r.scratch ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <input
+                          type="number"
+                          value={r.widthMm || ''}
+                          onChange={(e) => updateRow(i, { widthMm: Number(e.target.value) })}
+                          style={{ width: 64 }}
+                          className="price"
+                        />
+                        <span style={{ color: 'var(--muted)' }}>×</span>
+                        <input
+                          type="number"
+                          value={r.heightMm || ''}
+                          onChange={(e) => updateRow(i, { heightMm: Number(e.target.value) })}
+                          style={{ width: 64 }}
+                          className="price"
+                        />
+                        <span style={{ color: 'var(--muted)' }}>mm</span>
+                      </span>
+                    ) : (
+                      <>
+                        {r.rawSpec}
+                        <span style={{ color: 'var(--muted)' }}>
+                          {' '}
+                          {r.widthMm}×{r.heightMm}mm
+                        </span>
+                      </>
+                    )}
                   </td>
                   <td>
                     <input
                       type="number"
                       value={r.qty}
                       onChange={(e) => updateRow(i, { qty: Number(e.target.value) })}
-                      style={{ width: 70 }}
+                      style={{ width: 64 }}
                     />
-                    {r.unit}
+                    {r.scratch ? (
+                      <select
+                        value={r.unit}
+                        onChange={(e) => updateRow(i, { unit: e.target.value })}
+                        style={{ width: 56, marginLeft: 4 }}
+                      >
+                        <option value="张">张</option>
+                        <option value="卷">卷</option>
+                      </select>
+                    ) : (
+                      r.unit
+                    )}
                   </td>
                   <td>
                     <input
@@ -260,15 +379,39 @@ export function NewOrderPage() {
                   </td>
                   <td className="price">{r.amount}</td>
                   <td>
+                    <input
+                      value={r.remark}
+                      onChange={(e) => updateRow(i, { remark: e.target.value })}
+                      placeholder="选填"
+                      style={{ width: 120 }}
+                    />
+                  </td>
+                  <td>
                     {r.warning ? (
                       <span className="badge" style={{ background: '#fde8e8', color: 'var(--danger)' }}>
                         {r.warning}
                       </span>
+                    ) : r.scratch ? (
+                      <span className="badge">手动行</span>
                     ) : r.isManual ? (
                       <span className="badge">手动价</span>
                     ) : (
-                      <span className="badge badge-ok">自动（{r.rollPrice}/卷）</span>
+                      <span
+                        className="badge badge-ok"
+                        title={r.priceSource === 'base' ? '该客户无专属价，回落产品基础价' : '客户专属价'}
+                      >
+                        {r.priceSource === 'base' ? '基础价' : '客户价'} {r.rollPrice}/卷
+                      </span>
                     )}
+                  </td>
+                  <td>
+                    <button
+                      className="btn"
+                      style={{ padding: '4px 10px', background: 'var(--danger)' }}
+                      onClick={() => removeRow(i)}
+                    >
+                      删除
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -281,7 +424,7 @@ export function NewOrderPage() {
                 <td className="price" style={{ fontWeight: 600 }}>
                   {total}
                 </td>
-                <td>{amountToChinese(total)}</td>
+                <td colSpan={3}>{amountToChinese(total)}</td>
               </tr>
             </tfoot>
           </table>
@@ -292,6 +435,16 @@ export function NewOrderPage() {
             {unresolved.length > 0 && (
               <span style={{ color: 'var(--danger)', marginLeft: 12 }}>
                 有 {unresolved.length} 行未匹配/无报价，改手动价或先补数据后可保存
+              </span>
+            )}
+            {unresolved.length === 0 && incompleteManual.length > 0 && (
+              <span style={{ color: 'var(--danger)', marginLeft: 12 }}>
+                有 {incompleteManual.length} 行手动行未填全（品名 / 规格 / 数量），补全后可保存
+              </span>
+            )}
+            {unresolved.length === 0 && incompleteManual.length === 0 && invalidQty.length > 0 && (
+              <span style={{ color: 'var(--danger)', marginLeft: 12 }}>
+                有 {invalidQty.length} 行数量为 0 或空，填正确数量后可保存
               </span>
             )}
           </div>

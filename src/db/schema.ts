@@ -1,7 +1,9 @@
-// SQLite 表结构（6 表）。对应 AIREADME/ARCHITECTURE 数据模型。
+// SQLite 表结构（7 表）。对应 AIREADME/ARCHITECTURE 数据模型。
 // 红线落地点：
-//  - quotes：报价二维（customer_id × product_id），改价追加新行；每 (customer, product) 至多一条 is_current=1
+//  - quotes：客户专属报价，二维（customer_id × product_id），改价追加新行；每 (customer, product) 至多一条 is_current=1
 //    （部分唯一索引 + CHECK(is_current IN (0,1)) 双重强制，后者堵住非 0/1 值绕过索引）。
+//  - product_prices：产品基础价（一维，仅 product_id），同样改价追加 + 每产品至多一条 is_current=1。
+//    定位：客户无专属价时的「回落默认」，绝不取代客户价（取价顺序：客户价 → 基础价 → 无价）。见 DECISIONS D7。
 //  - order_items：快照 roll_price_used，历史订单不随后续报价变动。
 // 时区：日期 / 时间默认一律本机本地时区（商家所在地），用 'localtime'，避免 UTC 导致凌晨订单错算日期 / 月份。
 
@@ -45,6 +47,21 @@ CREATE TABLE IF NOT EXISTS quotes (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_quotes_one_current
   ON quotes (customer_id, product_id) WHERE is_current = 1;
 CREATE INDEX IF NOT EXISTS idx_quotes_cp ON quotes (customer_id, product_id);
+
+-- 产品基础价（每卷价，卷 = 21㎡，与客户报价同口径）。结构镜像 quotes 去掉 customer 维度。
+-- 改价同样追加新行 + 旧行 is_current=0；每产品至多一条 is_current=1（部分唯一索引 + CHECK 双重强制）。
+-- 加表走 IF NOT EXISTS：旧库 openDb 时自动补建，无需迁移块（见 db/index.ts 迁移约定）。
+CREATE TABLE IF NOT EXISTS product_prices (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id     INTEGER NOT NULL REFERENCES products(id),
+  roll_price     REAL    NOT NULL CHECK (roll_price >= 0),
+  effective_date TEXT    NOT NULL DEFAULT (date('now', 'localtime')),
+  is_current     INTEGER NOT NULL DEFAULT 1 CHECK (is_current IN (0, 1)),
+  note           TEXT    NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_product_prices_one_current
+  ON product_prices (product_id) WHERE is_current = 1;
+CREATE INDEX IF NOT EXISTS idx_product_prices_product ON product_prices (product_id);
 
 CREATE TABLE IF NOT EXISTS orders (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,

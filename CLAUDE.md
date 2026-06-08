@@ -4,7 +4,7 @@
 > 本文件是 bootstrap router：只放状态 / 路由 / 红线指针 / 维护责任 / 命令。详细真相源在 `AIREADME/`（先读 `AIREADME/INDEX.md`）。
 
 ## 当前状态
-in-progress。Phase 1 + Phase 2 主线完成：DB（schema/迁移/DAO）+ Electron IPC + 全部业务页（下单/订单/送货单打印/管理/统计/公司信息），「粘贴→出单→送货单」闭环已通，71 测试绿。下一步：打磨（加手动行 / 行级备注）+ 真机验收 + Later（备份 / Windows 安装包，见 `AIREADME/ROADMAP`）。
+in-progress。Phase 1 + Phase 2 主线完成：DB（schema/迁移/DAO）+ Electron IPC + 全部业务页（下单/订单/送货单打印/管理/统计/公司信息），「粘贴→出单→送货单」闭环已通。已加：下单手动行 + 行级备注；三层报价（产品基础价 + 客户专属价 + 下单回落，DECISIONS D7）。81 测试绿。下一步：批量调价 UI（原料浮动一键给多客户追加新报价）+ 真机验收 + Later（备份 / Windows 安装包，见 `AIREADME/ROADMAP`）。
 
 ## 加载路由（任务 → 读 AIREADME）
 

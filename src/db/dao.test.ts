@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { existsSync, rmSync } from 'fs';
 import {
   openDb,
   migrate,
@@ -11,6 +14,11 @@ import {
   setQuote,
   getCurrentQuote,
   listQuoteHistory,
+  setBasePrice,
+  getCurrentBasePrice,
+  listBasePriceHistory,
+  listCurrentBasePrices,
+  getEffectiveQuote,
   createOrder,
   getOrder,
   listOrders,
@@ -73,6 +81,55 @@ describe('quotes 红线：改价追加 + 翻 is_current', () => {
     setQuote(db, { customerId: cid2, productId: pid, rollPrice: 80 });
     expect(getCurrentQuote(db, cid, pid)?.rollPrice).toBe(100);
     expect(getCurrentQuote(db, cid2, pid)?.rollPrice).toBe(80);
+  });
+});
+
+describe('product_prices 基础价（红线 D7：改价追加 + 客户价优先回落）', () => {
+  it('设/改基础价：追加新行、旧行 is_current=0、历史保留、只一条 current', () => {
+    setBasePrice(db, { productId: pid, rollPrice: 80 });
+    setBasePrice(db, { productId: pid, rollPrice: 90 });
+    expect(getCurrentBasePrice(db, pid)?.rollPrice).toBe(90);
+    const hist = listBasePriceHistory(db, pid);
+    expect(hist).toHaveLength(2);
+    expect(hist.filter((b) => b.isCurrent)).toHaveLength(1);
+    expect(hist.find((b) => b.rollPrice === 80)?.isCurrent).toBe(false); // 旧行翻 0
+  });
+
+  it('部分唯一索引：每产品至多一条 is_current=1（绕过 setBasePrice 直插亦被拦）', () => {
+    setBasePrice(db, { productId: pid, rollPrice: 80 });
+    expect(() =>
+      db
+        .prepare('INSERT INTO product_prices (product_id, roll_price, is_current) VALUES (?, ?, 1)')
+        .run(pid, 100),
+    ).toThrow();
+  });
+
+  it('setBasePrice 拒绝非正价（0 / 负）', () => {
+    expect(() => setBasePrice(db, { productId: pid, rollPrice: 0 })).toThrow();
+    expect(() => setBasePrice(db, { productId: pid, rollPrice: -1 })).toThrow();
+  });
+
+  it('FK：给不存在产品设基础价直接抛错', () => {
+    expect(() => setBasePrice(db, { productId: 99999, rollPrice: 80 })).toThrow();
+  });
+
+  it('listCurrentBasePrices 只返回各产品当前价', () => {
+    const pid2 = createProduct(db, { name: '06纯低温胶' });
+    setBasePrice(db, { productId: pid, rollPrice: 80 });
+    setBasePrice(db, { productId: pid, rollPrice: 90 }); // pid 改价
+    setBasePrice(db, { productId: pid2, rollPrice: 70 });
+    const cur = listCurrentBasePrices(db);
+    expect(cur).toHaveLength(2);
+    expect(cur.find((b) => b.productId === pid)?.rollPrice).toBe(90);
+    expect(cur.find((b) => b.productId === pid2)?.rollPrice).toBe(70);
+  });
+
+  it('getEffectiveQuote 取价顺序：客户价优先 → 基础价回落 → 都无 undefined', () => {
+    expect(getEffectiveQuote(db, cid, pid)).toBeUndefined(); // 都没设
+    setBasePrice(db, { productId: pid, rollPrice: 80 });
+    expect(getEffectiveQuote(db, cid, pid)).toEqual({ rollPrice: 80, source: 'base' }); // 回落基础价
+    setQuote(db, { customerId: cid, productId: pid, rollPrice: 120 });
+    expect(getEffectiveQuote(db, cid, pid)).toEqual({ rollPrice: 120, source: 'customer' }); // 客户价优先（二维不退化）
   });
 });
 
@@ -283,5 +340,40 @@ describe('migrate 旧库补列（回归）', () => {
     );
     expect(cols2.filter((c) => c === 'product_name')).toHaveLength(1); // 不重复加列
     old.close();
+  });
+});
+
+describe('旧库 openDb 自动补建 product_prices（升级回归，D7）', () => {
+  it('已迁移旧库（user_version=1、无 product_prices）重开后自动补表、旧数据保留、可回落基础价', () => {
+    // 用真实文件（非 :memory:，:memory: 每次 new 都是新库无法复开），结束清理
+    const file = join(tmpdir(), `rqc-upgrade-${process.pid}-${Date.now()}.db`);
+    const cleanup = () => {
+      for (const ext of ['', '-wal', '-shm']) if (existsSync(file + ext)) rmSync(file + ext);
+    };
+    try {
+      // 造「旧库」：跑现行 schema 后删掉 product_prices，模拟该表诞生前建、且已迁移过的库
+      const old = openDb(file);
+      const oc = createCustomer(old, { name: '老客户' });
+      const op = createProduct(old, { name: '老产品' });
+      old.exec('DROP TABLE product_prices'); // 索引随表一并删除
+      old.pragma('user_version = 1'); // 已迁移：migrate 对它是 no-op，补表只能靠 SCHEMA_SQL 的 IF NOT EXISTS
+      old.close();
+
+      // 重开同一文件：openDb 先 exec(SCHEMA_SQL) 再 migrate，product_prices 应被 IF NOT EXISTS 补回
+      const db2 = openDb(file);
+      const cols = db2.prepare('PRAGMA table_info(product_prices)').all() as { name: string }[];
+      expect(cols.map((c) => c.name)).toContain('roll_price'); // 表已补建
+
+      // 旧数据原样还在
+      expect(listCustomers(db2).map((c) => c.name)).toContain('老客户');
+      expect(listProducts(db2).map((p) => p.name)).toContain('老产品');
+
+      // 基础价机制可用 + getEffectiveQuote 回落
+      setBasePrice(db2, { productId: op, rollPrice: 88 });
+      expect(getEffectiveQuote(db2, oc, op)).toEqual({ rollPrice: 88, source: 'base' });
+      db2.close();
+    } finally {
+      cleanup();
+    }
   });
 });

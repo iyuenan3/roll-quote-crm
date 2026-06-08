@@ -56,7 +56,10 @@ export function DeliveryNote({ order, items, customer, company }: Props) {
           {items.map((it, i) => (
             <tr key={it.id}>
               <td>{i + 1}</td>
-              <td>{it.productName || '-'}</td>
+              <td>
+                {it.productName || '-'}
+                {it.remark ? <div className="dn-item-remark">备注：{it.remark}</div> : null}
+              </td>
               <td>{it.rawSpec}</td>
               <td>
                 {it.qty}

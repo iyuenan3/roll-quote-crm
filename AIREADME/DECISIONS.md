@@ -43,3 +43,11 @@
 - Decision: unit_price = round(rawUnit, 3)；amount = round(rawUnit × qty, 0)，仍以未截断单价乘张数后取整到元。常量见 `pricing.ts` 的 UNIT_PRICE_DECIMALS / AMOUNT_DECIMALS。
 - Alternatives: 金额用「显示的 3 位单价 × 数量」再取整（否决：违反未截断红线；且 3 位精度下两种算法差异可忽略）。
 - Tradeoff: 送货单上「单价 × 数量」与整数金额可能有不超过 1 元的视觉差（金额取整所致，以金额为准）。
+
+## D7 · 2026-06-08 · 加产品基础价层（客户无专属价时回落），不破二维红线
+- Problem: 同一产品有「基础报价」，各客户又有不同专属价，价格还随原料浮动。商家不想给每个客户每个产品都手录一遍价。
+- Constraint: 红线「报价是客户×产品二维，绝不退化成产品一维全局价」「报价历史只追加」「订单快照不回改」不可破；计价公式（D1）不可变。
+- Decision: 新增 `product_prices` 表（仅 product 维，结构镜像 quotes：roll_price + effective_date + is_current + 部分唯一索引；改价同样追加新行 + 翻 is_current）。下单取价顺序 = 客户专属价（quotes）→ 产品基础价（product_prices）→ 都无则拦下单（`dao.getEffectiveQuote`）。客户价始终优先且独立存绝对值，基础价只回落、绝不改写客户价。订单仍快照 roll_price_used。基础价也 append-only、可看历史与浮动。加表走 SCHEMA_SQL 的 IF NOT EXISTS，旧库 openDb 自动补建，无需 user_version 迁移块。
+- Why 不破红线: 基础价是「回落默认」而非「全局价」。客户专属价存在时永远优先，二维定价不被取代；新增层只补「客户没单独报价」的空缺，是 enrich 不是 degrade。历史只追加、订单快照、计价公式全沿用既有机制。
+- Alternatives: ① 客户价存「基础价×折扣」相对值，基础价变则自动浮动（否决：客户实际价变成算出来的，历史追溯与订单快照口径复杂、易与红线冲突；且商家明确选「客户价存绝对值」）。② 基础价存 products 一个可变列、不留史（否决：基础价也会浮动，留痕并与客户价对称更一致，代价仅一张镜像表）。
+- Tradeoff: 多一张表 + 一套镜像 DAO，换来三层报价（基础 / 客户 / 订单快照）清晰解耦、各自留痕。批量调价（原料涨价一键给多客户追加新报价）留作后续，当前靠逐客户 setQuote 已可达成。

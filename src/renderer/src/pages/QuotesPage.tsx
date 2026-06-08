@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Customer, Product, Quote } from '../../../shared/api';
+import type { Customer, Product, Quote, BasePrice } from '../../../shared/api';
 import { getDb, errMsg } from '../lib/db';
 
 export function QuotesPage() {
@@ -8,6 +8,7 @@ export function QuotesPage() {
   const [customerId, setCustomerId] = useState('');
   const [productId, setProductId] = useState('');
   const [current, setCurrent] = useState<Quote | undefined>(undefined);
+  const [base, setBase] = useState<BasePrice | undefined>(undefined);
   const [history, setHistory] = useState<Quote[]>([]);
   const [price, setPrice] = useState('');
   const [note, setNote] = useState('');
@@ -33,12 +34,16 @@ export function QuotesPage() {
     setError('');
     const a = { customerId: Number(customerId), productId: Number(productId) };
     try {
-      const [cur, hist] = await Promise.all([
+      const [cur, hist, b] = await Promise.all([
         getDb().getCurrentQuote(a),
         getDb().listQuoteHistory(a),
+        getDb().getCurrentBasePrice({ productId: Number(productId) }),
       ]);
       setCurrent(cur);
       setHistory(hist);
+      setBase(b);
+      // 没有客户专属价时，预填产品基础价作默认（用户可改后保存为客户专属价）
+      setPrice(!cur && b ? String(b.rollPrice) : '');
     } catch (e) {
       setError(errMsg(e));
     }
@@ -81,7 +86,7 @@ export function QuotesPage() {
     <div>
       <h2 className="page-title">报价</h2>
       <p className="page-sub">
-        报价按「客户 × 产品」二维。改价不覆盖旧价：追加新记录并把旧的转为历史，全程留痕。
+        报价按「客户 × 产品」二维。改价不覆盖旧价：追加新记录并把旧的转为历史，全程留痕。未设客户专属价的产品，下单时回落产品基础价（在「产品」页设）。
       </p>
 
       <div className="card">
@@ -121,10 +126,18 @@ export function QuotesPage() {
             {current ? (
               <p>
                 <span className="current-price">¥{current.rollPrice}</span>
-                <span className="price-sub"> 元 / 卷（生效日 {current.effectiveDate}）</span>
+                <span className="price-sub"> 元 / 卷（客户专属价，生效日 {current.effectiveDate}）</span>
               </p>
             ) : (
-              <p className="empty">该客户该产品暂无报价，请在下方设置。</p>
+              <p className="empty">该客户该产品暂无专属价。</p>
+            )}
+            {base ? (
+              <p className="price-sub">
+                产品基础价：¥{base.rollPrice} / 卷
+                {!current ? '（当前无客户专属价，下单按此基础价回落）' : ''}
+              </p>
+            ) : (
+              <p className="price-sub">该产品未设基础价（可到「产品」页设置）。</p>
             )}
             <div className="form-row">
               <div className="field">

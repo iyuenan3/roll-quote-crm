@@ -28,7 +28,7 @@ unit_price = round(roll_price × area_sqm ÷ 21, 3)        // 精确到小数点
 amount     = round(roll_price × area_sqm ÷ 21 × qty, 0)  // 四舍五入到整数元（D6），用未截断单价乘
 ```
 
-- roll_price = 该「客户 × 产品」当前 is_current 报价（每卷价，卷 = 21㎡）。
+- roll_price = 取价顺序：该「客户 × 产品」当前专属报价（quotes）→ 无则回落该产品当前基础价（product_prices）→ 都无则不计价、拦下单。每卷价，卷 = 21㎡。客户价永远优先，基础价只回落（见 DECISIONS D7）。
 - 张 / 卷同一公式：整卷面积 ≈ 21㎡，单价自然退化为每卷报价。
 - 手动覆盖行（is_manual=1）跳过公式，直接取商家手填单价 / 金额。
 

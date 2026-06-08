@@ -226,6 +226,12 @@ tbody tr:hover {
 .dn-table tfoot td {
   font-weight: 600;
 }
+.dn-item-remark {
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: normal;
+  color: #555;
+}
 .dn-terms {
   margin-top: 14px;
   font-size: 13px;

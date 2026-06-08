@@ -33,6 +33,20 @@ export interface Quote {
   isCurrent: boolean;
   note: string;
 }
+/** 产品基础价（仅 product 维，客户无专属价时回落用）。 */
+export interface BasePrice {
+  id: number;
+  productId: number;
+  rollPrice: number;
+  effectiveDate: string;
+  isCurrent: boolean;
+  note: string;
+}
+/** 取价结果：实际每卷价 + 来源（客户专属价 / 产品基础价）。 */
+export interface EffectiveQuote {
+  rollPrice: number;
+  source: 'customer' | 'base';
+}
 export interface Company {
   name: string;
   address: string;
@@ -94,6 +108,16 @@ function toQuote(r: any): Quote {
   return {
     id: r.id,
     customerId: r.customer_id,
+    productId: r.product_id,
+    rollPrice: r.roll_price,
+    effectiveDate: r.effective_date,
+    isCurrent: !!r.is_current,
+    note: r.note,
+  };
+}
+function toBasePrice(r: any): BasePrice {
+  return {
+    id: r.id,
     productId: r.product_id,
     rollPrice: r.roll_price,
     effectiveDate: r.effective_date,
@@ -234,6 +258,67 @@ export function listQuoteHistory(db: DB, customerId: number, productId: number):
       )
       .all(customerId, productId) as any[]
   ).map(toQuote);
+}
+
+// ---------- product_prices（产品基础价；改价追加 + 翻 is_current，同 quotes）----------
+export function setBasePrice(
+  db: DB,
+  input: { productId: number; rollPrice: number; effectiveDate?: string; note?: string },
+): number {
+  if (!Number.isFinite(input.rollPrice) || input.rollPrice <= 0) {
+    throw new Error('setBasePrice: rollPrice 必须为正有限数');
+  }
+  const effectiveDate = input.effectiveDate?.trim() || null; // 空串 / 空白归一为 null，回落当天本地日期
+  const tx = db.transaction((i: typeof input) => {
+    db.prepare(
+      'UPDATE product_prices SET is_current = 0 WHERE product_id = ? AND is_current = 1',
+    ).run(i.productId);
+    const r = db
+      .prepare(
+        `INSERT INTO product_prices (product_id, roll_price, effective_date, is_current, note)
+         VALUES (?, ?, COALESCE(?, date('now', 'localtime')), 1, ?)`,
+      )
+      .run(i.productId, i.rollPrice, effectiveDate, i.note ?? '');
+    return Number(r.lastInsertRowid);
+  });
+  return tx(input);
+}
+
+export function getCurrentBasePrice(db: DB, productId: number): BasePrice | undefined {
+  const r = db
+    .prepare('SELECT * FROM product_prices WHERE product_id = ? AND is_current = 1')
+    .get(productId);
+  return r ? toBasePrice(r) : undefined;
+}
+
+export function listBasePriceHistory(db: DB, productId: number): BasePrice[] {
+  return (
+    db.prepare('SELECT * FROM product_prices WHERE product_id = ? ORDER BY id DESC').all(productId) as any[]
+  ).map(toBasePrice);
+}
+
+/** 全部产品的当前基础价（产品列表页一览用）。 */
+export function listCurrentBasePrices(db: DB): BasePrice[] {
+  return (db.prepare('SELECT * FROM product_prices WHERE is_current = 1').all() as any[]).map(
+    toBasePrice,
+  );
+}
+
+/**
+ * 取该「客户 × 产品」下单应用的每卷价 + 来源。
+ * 取价顺序（红线 D7）：客户专属价 → 产品基础价 → 都无则 undefined（调用方拦下单）。
+ * 客户价始终优先，基础价只回落，绝不取代客户价（不退化成一维全局价）。
+ */
+export function getEffectiveQuote(
+  db: DB,
+  customerId: number,
+  productId: number,
+): EffectiveQuote | undefined {
+  const q = getCurrentQuote(db, customerId, productId);
+  if (q) return { rollPrice: q.rollPrice, source: 'customer' };
+  const b = getCurrentBasePrice(db, productId);
+  if (b) return { rollPrice: b.rollPrice, source: 'base' };
+  return undefined;
 }
 
 // ---------- orders（红线：快照 roll_price_used，历史不回改）----------

@@ -6,6 +6,8 @@ import {
   createProduct,
   setQuote,
   getCurrentQuote,
+  setBasePrice,
+  getEffectiveQuote,
   createOrder,
   getOrder,
   voidOrder,
@@ -101,6 +103,81 @@ describe('order flow 端到端（parse → quote → price → persist → read�
     expect(after.items[0].amount).toBe(before); // 历史订单金额纹丝不动
     expect(after.items[0].rollPriceUsed).toBe(100);
     expect(getCurrentQuote(db, cid, p05)!.rollPrice).toBe(200); // 当前报价已更新
+  });
+
+  it('手动行（productId null）+ 行级备注：落库读回一致，与自动行同单共存', () => {
+    // 自动行：整卷 06胶 → 单价 100、金额 2200
+    const auto = buildItems('06纯低温胶 420*50000 22卷')[0];
+    // 手动行：目录外品名、手填单价，带备注；金额 = round(单价 × 数量) = 12.5 × 4 = 50
+    const manual = {
+      productId: null,
+      productName: '定制护角（目录外）',
+      rawSpec: '1000*1000',
+      widthMm: 1000,
+      heightMm: 1000,
+      qty: 4,
+      unit: '张',
+      areaSqm: areaSqm(1000, 1000),
+      rollPriceUsed: 0,
+      unitPrice: computeRow({ rollPrice: 0, widthMm: 1000, heightMm: 1000, qty: 4, isManual: true, manualUnitPrice: 12.5 }).unitPrice,
+      amount: computeRow({ rollPrice: 0, widthMm: 1000, heightMm: 1000, qty: 4, isManual: true, manualUnitPrice: 12.5 }).amount,
+      isManual: true,
+      remark: '加急，周五前要',
+    };
+
+    const oid = createOrder(db, { orderNo: 'D-MANUAL-1', customerId: cid, items: [auto, manual] });
+    const saved = getOrder(db, oid)!;
+
+    expect(saved.items).toHaveLength(2);
+    const m = saved.items[1];
+    expect(m.isManual).toBe(true);
+    expect(m.productId).toBeNull(); // 目录外，无产品 id
+    expect(m.productName).toBe('定制护角（目录外）'); // 品名快照
+    expect(m.remark).toBe('加急，周五前要'); // 行级备注落库读回
+    expect(m.unitPrice).toBe(12.5);
+    expect(m.amount).toBe(50); // 12.5 × 4
+    expect(saved.items[0].remark).toBe(''); // 自动行未填备注默认空
+    expect(saved.order.totalAmount).toBe(2250); // 2200 + 50
+    expect(saved.order.totalInWords).toBe(amountToChinese(2250));
+  });
+
+  it('回落基础价下单：客户无专属价按产品基础价算并快照；之后设客户价不动老订单', () => {
+    // 新产品只设基础价、不设该客户专属价
+    const p07 = createProduct(db, { name: '07纯低温胶' });
+    setBasePrice(db, { productId: p07, rollPrice: 100 });
+
+    const eq = getEffectiveQuote(db, cid, p07)!;
+    expect(eq).toEqual({ rollPrice: 100, source: 'base' }); // 回落基础价
+
+    const r = computeRow({ rollPrice: eq.rollPrice, widthMm: 420, heightMm: 50000, qty: 1 }); // 整卷 → 100
+    const oid = createOrder(db, {
+      orderNo: 'D-BASE-1',
+      customerId: cid,
+      items: [
+        {
+          productId: p07,
+          productName: '07纯低温胶',
+          rawSpec: '420*50000',
+          widthMm: 420,
+          heightMm: 50000,
+          qty: 1,
+          unit: '卷',
+          areaSqm: areaSqm(420, 50000),
+          rollPriceUsed: eq.rollPrice,
+          unitPrice: r.unitPrice,
+          amount: r.amount,
+          isManual: false,
+        },
+      ],
+    });
+    const saved = getOrder(db, oid)!;
+    expect(saved.items[0].rollPriceUsed).toBe(100); // 快照回落价
+    expect(saved.items[0].amount).toBe(100);
+
+    // 之后给该客户该产品设专属价：取价改走客户价，但老订单快照纹丝不动
+    setQuote(db, { customerId: cid, productId: p07, rollPrice: 150 });
+    expect(getEffectiveQuote(db, cid, p07)).toEqual({ rollPrice: 150, source: 'customer' });
+    expect(getOrder(db, oid)!.items[0].rollPriceUsed).toBe(100); // 红线：历史快照不回改
   });
 
   it('月度统计：作废订单不计入', () => {
