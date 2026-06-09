@@ -181,11 +181,7 @@ export function ProductsPage() {
                   </td>
                   <td>{p.specNote || '-'}</td>
                   <td>
-                    <button
-                      className="btn"
-                      style={{ padding: '4px 10px' }}
-                      onClick={() => void selectForBase(p)}
-                    >
+                    <button className="btn btn-secondary btn-sm" onClick={() => void selectForBase(p)}>
                       设/改基础价
                     </button>
                   </td>
@@ -224,11 +220,7 @@ export function ProductsPage() {
             <button className="btn" onClick={submitBase} disabled={baseBusy}>
               {currentBase ? '保存为新基础价' : '设置基础价'}
             </button>
-            <button
-              className="btn"
-              style={{ background: 'var(--bg)', color: 'var(--text)' }}
-              onClick={() => setSelected(null)}
-            >
+            <button className="btn btn-secondary" onClick={() => setSelected(null)}>
               关闭
             </button>
           </div>

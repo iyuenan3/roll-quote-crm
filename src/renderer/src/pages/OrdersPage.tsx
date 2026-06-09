@@ -111,15 +111,11 @@ export function OrdersPage() {
                     )}
                   </td>
                   <td>
-                    <button className="btn" style={{ padding: '4px 10px' }} onClick={() => view(o.id)}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => view(o.id)}>
                       查看
                     </button>{' '}
                     {o.status !== 'void' && (
-                      <button
-                        className="btn"
-                        style={{ padding: '4px 10px', background: 'var(--danger)' }}
-                        onClick={() => doVoid(o.id)}
-                      >
+                      <button className="btn btn-danger btn-sm" onClick={() => doVoid(o.id)}>
                         作废
                       </button>
                     )}
@@ -137,7 +133,7 @@ export function OrdersPage() {
             <button className="btn" onClick={() => setPrinting(true)}>
               打印 / 存 PDF
             </button>{' '}
-            <button className="btn" style={{ background: 'var(--bg)', color: 'var(--text)' }} onClick={() => setDetail(null)}>
+            <button className="btn btn-secondary" onClick={() => setDetail(null)}>
               关闭
             </button>
           </div>

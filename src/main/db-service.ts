@@ -52,7 +52,8 @@ function sanitizeError(e: unknown): Error {
       if (code.includes('CHECK')) return new Error('数据不合法（校验未通过）');
       return new Error('数据库操作失败');
     }
-    return new Error(e.message); // 我们自己抛的中文校验错误，原样透传
+    // 我们自己抛的校验错误：剥掉内部函数名前缀（如 "setBasePrice: "）再透传，不泄露实现细节
+    return new Error(e.message.replace(/^[A-Za-z][\w]*:\s*/, ''));
   }
   return new Error('未知错误');
 }

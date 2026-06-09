@@ -13,6 +13,7 @@ import {
   voidOrder,
   statsByCustomerMonth,
   statsByProductMonth,
+  listOrderMonths,
 } from './index';
 import { parseOrder } from '../core/parse-order';
 import { computeRow, areaSqm, amountToChinese } from '../core/pricing';
@@ -196,5 +197,98 @@ describe('order flow 端到端（parse → quote → price → persist → read�
 
     const prod = statsByProductMonth(db).find((r) => r.productId === p05)!;
     expect(prod.qty).toBe(21); // 仅有效单的数量
+  });
+});
+
+describe('月度统计聚合（多月 / ym 过滤 / 多客户 / 手动行 null 产品 / 改名快照）', () => {
+  let db: DB;
+  let zhang: number;
+  let li: number;
+  let p05: number;
+  let p06: number;
+
+  beforeEach(() => {
+    db = openDb();
+    zhang = createCustomer(db, { name: '张三' });
+    li = createCustomer(db, { name: '李四' });
+    p05 = createProduct(db, { name: '05纯低温胶' });
+    p06 = createProduct(db, { name: '06纯低温胶' });
+    setQuote(db, { customerId: zhang, productId: p05, rollPrice: 100 });
+    setQuote(db, { customerId: li, productId: p05, rollPrice: 100 });
+  });
+  afterEach(() => db.close());
+
+  // 整卷 05 胶（420×50000≈21㎡，报价 100/卷）→ 单价/金额 = 100
+  const roll = (productId: number, productName: string) => ({
+    productId,
+    productName,
+    rawSpec: '420*50000',
+    widthMm: 420,
+    heightMm: 50000,
+    qty: 1,
+    unit: '卷',
+    areaSqm: areaSqm(420, 50000),
+    rollPriceUsed: 100,
+    unitPrice: 100,
+    amount: 100,
+    isManual: false,
+  });
+
+  it('跨月 + 多客户分组 + ym 过滤分支 + 作废不计 + listOrderMonths 去重倒序', () => {
+    createOrder(db, { orderNo: 'M-401', customerId: zhang, orderDate: '2026-04-10', items: [roll(p05, '05纯低温胶')] });
+    createOrder(db, { orderNo: 'M-402', customerId: li, orderDate: '2026-04-20', items: [roll(p05, '05纯低温胶')] });
+    createOrder(db, { orderNo: 'M-501', customerId: zhang, orderDate: '2026-05-05', items: [roll(p05, '05纯低温胶')] });
+    createOrder(db, { orderNo: 'M-502', customerId: zhang, orderDate: '2026-05-15', items: [roll(p05, '05纯低温胶')] });
+    const voided = createOrder(db, { orderNo: 'M-503', customerId: li, orderDate: '2026-05-25', items: [roll(p05, '05纯低温胶')] });
+    voidOrder(db, voided);
+
+    const all = statsByCustomerMonth(db);
+    expect(all).toHaveLength(3); // (4月张三)(4月李四)(5月张三)；作废的 5 月李四不计
+    const pick = (y: string, c: number) => all.find((r) => r.ym === y && r.customerId === c);
+    expect(pick('2026-04', zhang)).toMatchObject({ orderCount: 1, total: 100 });
+    expect(pick('2026-04', li)).toMatchObject({ orderCount: 1, total: 100 });
+    expect(pick('2026-05', zhang)).toMatchObject({ orderCount: 2, total: 200 });
+    expect(pick('2026-05', li)).toBeUndefined();
+
+    const may = statsByCustomerMonth(db, '2026-05'); // ym 过滤分支
+    expect(may).toHaveLength(1);
+    expect(may[0]).toMatchObject({ ym: '2026-05', customerId: zhang, orderCount: 2, total: 200 });
+
+    expect(listOrderMonths(db)).toEqual(['2026-05', '2026-04']); // 去重倒序，仅含有有效单的月
+  });
+
+  it('产品统计：手动行 product_id=null 分组（同名合并 / 异名各行 / 与目录产品同名因 id 不同独立）', () => {
+    const manual = (name: string, qty: number, amount: number) => ({
+      productId: null,
+      productName: name,
+      rawSpec: '100*100',
+      widthMm: 100,
+      heightMm: 100,
+      qty,
+      unit: '张',
+      areaSqm: areaSqm(100, 100),
+      rollPriceUsed: 0,
+      unitPrice: amount / qty,
+      amount,
+      isManual: true,
+    });
+    createOrder(db, { orderNo: 'PM-1', customerId: zhang, orderDate: '2026-06-01', items: [manual('定制护角', 2, 20), manual('加工费', 1, 30)] });
+    createOrder(db, { orderNo: 'PM-2', customerId: zhang, orderDate: '2026-06-02', items: [manual('定制护角', 3, 30), roll(p05, '05纯低温胶')] });
+
+    const p = statsByProductMonth(db, '2026-06');
+    const row = (n: string) => p.filter((r) => r.productName === n);
+    expect(row('定制护角')).toHaveLength(1); // 两笔同名手动行(null id)合并为一行
+    expect(row('定制护角')[0]).toMatchObject({ productId: null, qty: 5, total: 50 });
+    expect(row('加工费')[0]).toMatchObject({ productId: null, qty: 1, total: 30 });
+    expect(row('05纯低温胶')[0]).toMatchObject({ productId: p05, qty: 1, total: 100 }); // 目录产品独立成行
+  });
+
+  it('产品统计：同一 product_id 改名后按「快照品名」分两行（明细保留历史名，符合快照红线）', () => {
+    createOrder(db, { orderNo: 'RN-1', customerId: zhang, orderDate: '2026-06-10', items: [roll(p06, '06纯低温胶')] });
+    createOrder(db, { orderNo: 'RN-2', customerId: zhang, orderDate: '2026-06-11', items: [roll(p06, '06高级胶')] }); // 改名后再下单
+
+    const p = statsByProductMonth(db, '2026-06').filter((r) => r.productId === p06);
+    expect(p).toHaveLength(2); // 同 id、不同快照名 → 2 行（明细按历史名；仪表盘 Top 再按 id 合并，是有意的口径分工）
+    expect(p.map((r) => r.productName).sort()).toEqual(['06纯低温胶', '06高级胶'].sort());
   });
 });

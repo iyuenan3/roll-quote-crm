@@ -3,6 +3,10 @@
 ⚑ 未 release。首个里程碑后倒序记版本块（Added / Changed / Fixed / Removed / Deprecated），理由链 DECISIONS。
 
 ## Unreleased
+- UI 重设 · 现代质感（2026-06-10）：纯 CSS 重写 styles.css 为完整设计系统（设计令牌 + 柔和阴影 + 卡片层次 + 按钮变体 + 焦点环），零新依赖、送货单打印样式保持。新建订单改两栏（表单 + 下单格式说明卡）；月度统计页仪表盘化（KPI 卡 + 各月销售额柱状趋势 + 客户/产品 Top 横向条形，纯 CSS 画图）；侧栏按 业务/档案/经营/系统 分组（小标题 + 分割线）。
+  - 配套对抗式审查（22 agent / 7 维）确认并修 8 处（0 高危）：Top 榜单稳定 React key、StatsPage 取数防竞态、条形/趋势文字溢出截断、表头/placeholder 对比度达标、错误消息剥内部函数名、数量框清空显示空、statsByCustomerMonth 改 LEFT JOIN + COALESCE（与 listOrders 同防御）。
+  - 补月度统计聚合单测（多月分组 / ym 过滤 / 多客户 / 作废不计 / listOrderMonths / 手动行 null 产品分组 / 改名快照分行）。测试 89 → 95。
+
 - 批量调价（2026-06-08）：新增「批量调价」页 + DAO（listCurrentQuotesByProduct / applyBatchRepricing：一笔事务逐客户追加新报价、可同时追加基础价，复用 setQuote/setBasePrice 的 savepoint 原子）+ core `adjustRollPrice`（percent/delta/set，round 2 位）。原料浮动时按统一方式给选中客户（可逐个排除）调价，仍只追加、旧价留痕。测试 81 → 89。
 
 - 产品基础价层（2026-06-08，DECISIONS D7）：新增 `product_prices` 表（append-only，镜像 quotes 去 customer 维）+ DAO（setBasePrice / getCurrentBasePrice / listBasePriceHistory / listCurrentBasePrices / getEffectiveQuote）+ 5 个 IPC。下单取价回落「客户专属价 → 产品基础价 → 无价拦单」；产品页设/改/看基础价历史，报价页预填基础价并显示，下单行标价来源（客户价 / 基础价）。测试 → 80。

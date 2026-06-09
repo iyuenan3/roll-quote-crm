@@ -543,10 +543,12 @@ export function listOrderMonths(db: DB): string[] {
 
 /** 客户 × 月 消费。ym 省略则跨全部月份。作废单不计。 */
 export function statsByCustomerMonth(db: DB, ym?: string): CustomerMonthStat[] {
+  // LEFT JOIN + COALESCE：与 listOrders 同一套防御口径，即使将来出现孤儿 customer_id 也不丢单
   const sql = `
-    SELECT strftime('%Y-%m', o.order_date) AS ym, o.customer_id, c.name AS customer_name,
+    SELECT strftime('%Y-%m', o.order_date) AS ym, o.customer_id,
+           COALESCE(c.name, '(客户已删除)') AS customer_name,
            COUNT(*) AS order_count, SUM(o.total_amount) AS total
-    FROM orders o JOIN customers c ON c.id = o.customer_id
+    FROM orders o LEFT JOIN customers c ON c.id = o.customer_id
     WHERE o.status = 'active' ${ym ? "AND strftime('%Y-%m', o.order_date) = ?" : ''}
     GROUP BY ym, o.customer_id
     ORDER BY ym DESC, total DESC`;

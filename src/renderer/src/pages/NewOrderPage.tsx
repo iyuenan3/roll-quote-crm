@@ -243,7 +243,8 @@ export function NewOrderPage() {
       <h2 className="page-title">新建订单</h2>
       <p className="page-sub">粘贴客户下单文本，自动按该客户该产品报价算价（无客户专属价时回落产品基础价）。可改量、改价（改价即转手动行），也可从零加手动行；每行可填备注。</p>
 
-      <div className="card">
+      <div className="form-with-aside">
+        <div className="card">
         <h3>下单信息</h3>
         <div className="form-row">
           <div className="field">
@@ -267,8 +268,8 @@ export function NewOrderPage() {
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            rows={6}
-            style={{ width: '100%', padding: 10, border: '1px solid var(--border)', borderRadius: 6, fontSize: 14, fontFamily: 'inherit' }}
+            rows={5}
+            style={{ width: '100%', resize: 'vertical' }}
             placeholder={'客户：张三\n05纯低温胶 2500*893 21张\n06纯低温胶 420*50000 22卷'}
           />
         </div>
@@ -276,15 +277,26 @@ export function NewOrderPage() {
           <button className="btn" onClick={doParse}>
             解析
           </button>
-          <button
-            className="btn"
-            style={{ background: 'var(--bg)', color: 'var(--text)' }}
-            onClick={addManualRow}
-          >
+          <button className="btn btn-secondary" onClick={addManualRow}>
             + 手动加行
           </button>
         </div>
         {msg && <p className="error" style={{ color: msg.startsWith('✅') ? 'var(--ok)' : undefined }}>{msg}</p>}
+        </div>
+
+        <aside className="card help-card">
+          <h3>下单格式</h3>
+          <pre className="code-sample">{`客户：张三
+05纯低温胶 2500*893 21张
+06纯低温胶 420*50000 22卷`}</pre>
+          <ul className="help-list">
+            <li>每行：<b>品名 尺寸 数量</b>，空格分隔。</li>
+            <li>尺寸：<b>宽*长</b>，毫米；分隔符 * × x 均可。</li>
+            <li>数量：数字 + 单位（<b>张 / 卷</b>）。</li>
+            <li>首行可写「客户：名称」自动选客户。</li>
+            <li>无客户专属价时，自动回落产品基础价。</li>
+          </ul>
+        </aside>
       </div>
 
       {rows.length > 0 && (
@@ -351,7 +363,7 @@ export function NewOrderPage() {
                   <td>
                     <input
                       type="number"
-                      value={r.qty}
+                      value={r.qty || ''}
                       onChange={(e) => updateRow(i, { qty: Number(e.target.value) })}
                       style={{ width: 64 }}
                     />
@@ -405,11 +417,7 @@ export function NewOrderPage() {
                     )}
                   </td>
                   <td>
-                    <button
-                      className="btn"
-                      style={{ padding: '4px 10px', background: 'var(--danger)' }}
-                      onClick={() => removeRow(i)}
-                    >
+                    <button className="btn btn-danger btn-sm" onClick={() => removeRow(i)}>
                       删除
                     </button>
                   </td>
